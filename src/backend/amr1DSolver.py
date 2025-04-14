@@ -166,9 +166,14 @@ class amr1dSolver:
                     self.temperature[i]=self.t_ref
                 else:
                     self.temperature[i]=self.temperature[i-1]+self.lapse_rate*max(self.z[i]-self.z[i-1],0.0)
-            self.nut[i]=0.41**2*self.z[i]*(1-min(self.z[i],790)/800)**2 #1e-5
-            self.tke[i]=0.41**2*self.z[i]*(1-min(self.z[i],790)/800)**2 #0.1
-            self.lscale[i]=self.z[i]*(1-min(self.z[i],790)/800)**2 #0.1
+            if(self.heat_flux_mode==4 and self.mode_value>0):
+                phiM=1+5*self.z[i]/self.mode_value
+            else:
+                phiM=1
+            self.nut[i]=0.41**2*self.z[i]/phiM*(1-min(self.z[i],290)/300)**2 #1e-5
+            #self.tke[i]=0.41**2*self.z[i]/phiM*(1-min(self.z[i],290)/300)**2 #0.1
+            self.lscale[i]=0.41*self.z[i]*(1-min(self.z[i],290)/300)**2 #0.1
+            self.tke[i]=self.nut[i]/(0.556*self.lscale[i]+1e-5)
             self.nutPrime[i]=self.nut[i]
             self.sigmaT[i]=1.0
         if(self.lower==0):

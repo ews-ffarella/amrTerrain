@@ -564,7 +564,14 @@ class amrBackend():
             else:
                 xdir= self.xref- farmRadius* np.cos((360-self.sweep_angle)*np.pi/180)
                 ydir= self.yref+ farmRadius* np.sin((360-self.sweep_angle)*np.pi/180)   
-        self.refRoughness=self.roughness_interp(xdir-self.xref,ydir-self.yref)
+        try:
+            self.refRoughness=self.roughness_interp(xdir-self.xref,ydir-self.yref)
+        except:
+                # Read from file 
+                try:
+                    self.refRoughness=float(self.yamlFile["refRoughness"])
+                except:
+                    self.refRoughness=0.1
         target.write("%-50s = %g\n"%("ABL.surface_roughness_z0 ",self.refRoughness))
         # Write Heights 
         if(not self.rans_1d):
@@ -628,12 +635,12 @@ class amrBackend():
             except:
                 forcingterms="VelocityFreeAtmosphereForcing ABLMeanBoussinesq BoussinesqBuoyancy "            
             else:
-                if(abs(float(molLength))>5000):
+                if(abs(float(molLength))>10000):
                     forcingterms="VelocityFreeAtmosphereForcing ABLMeanBoussinesq BoussinesqBuoyancy "  
                 else:
                     forcingterms="ABLMeanBoussinesq BoussinesqBuoyancy " 
         elif(self.caseType=="precursor"):
-            forcingterms="VelocityFreeAtmosphereForcing BoussinesqBuoyancy"
+            forcingterms="BoussinesqBuoyancy"
         else:
             forcingterms="ABLMeanBoussinesq BoussinesqBuoyancy RayleighDamping "
         try: 
@@ -819,8 +826,8 @@ class amrBackend():
         num_of_steps=30000
         tolerance=1e-3
         if(mol_length>0 and mol_length<500):
-            num_of_steps=50000
-            tolerance=1e-4
+             num_of_steps=30000
+             tolerance=1e-5
         # Update roughness for sweep angles 
         try:
             int(self.sweep_angle)
@@ -841,7 +848,15 @@ class amrBackend():
             else:
                 xdir= self.xref- farmRadius* np.cos((360-self.sweep_angle)*np.pi/180)
                 ydir= self.yref+ farmRadius* np.sin((360-self.sweep_angle)*np.pi/180)   
-        self.refRoughness=self.roughness_interp(xdir-self.xref,ydir-self.yref)
+        # Read the netcdf file for roughness 
+        try:
+            self.refRoughness=self.roughness_interp(xdir-self.xref,ydir-self.yref)
+        except:
+                # Read from file 
+                try:
+                    self.refRoughness=float(self.yamlFile["refRoughness"])
+                except:
+                    self.refRoughness=0.1
         #print(xdir,ydir,self.refRoughness)
         roughness_length=self.refRoughness
         terrain_ht=0
@@ -850,6 +865,8 @@ class amrBackend():
             inv_height=np.amax(self.terrainX3)+1500
         elif(mol_length<0):
             inv_height=843
+        else:
+            inv_height=800
         inv_width=0
         inv_strength=0
         lapse_rate=0.003
@@ -933,6 +950,7 @@ class amrBackend():
         wvals=data[:,3]
         tempvals=data[:,4]
         tkevals=data[:,5]
+        tkevalue=np.min(tkevals)
         if(target==' '):
             pass
         else:
@@ -955,8 +973,17 @@ class amrBackend():
         except:
             pass
         else:
+            # Find the z terrain location for data
+            error=10000 
+            for j in range(0,len(self.terrainX1)):
+                residual=np.sqrt((self.terrainX1[j])**2+(self.terrainX2[j])**2)
+                if(residual<error):
+                    error=residual
+                    xterrain=self.terrainX1[j]
+                    yterrain=self.terrainX2[j]
+                    zterrainmin=self.terrainX3[j]
             for i in range(0,len(zvals)):
-                if(zvals[i]>2048):
+                if(zvals[i]>(zterrainmin+1024)):
                     tkevalue=tkevals[i]
                     fixValue=True
                     break
@@ -1023,7 +1050,20 @@ class amrBackend():
             zheight=self.yamlFile["ransDomainTop"]
         except:
             zheight=self.terrainZMax+self.ABLHeight
-        dz=32.0
+        if(mol_length<0):
+            dz=32.0
+        else:
+            # Find the z terrain location for data
+            error=10000 
+            for j in range(0,len(self.terrainX1)):
+                residual=np.sqrt((self.terrainX1[j])**2+(self.terrainX2[j])**2)
+                if(residual<error):
+                    error=residual
+                    xterrain=self.terrainX1[j]
+                    yterrain=self.terrainX2[j]
+                    zterrainmin=self.terrainX3[j]
+            dz=16.0
+            zheight=zterrainmin+metMastHeight[0]+1024
         npts=int(zheight/dz)
         amr1D=amr1dSolver(npts,zheight,roughness_length,terrain_ht,pathToWrite)
         ug=[initial_ug,initial_vg]
@@ -1067,20 +1107,26 @@ class amrBackend():
             #print(xterrain,yterrain,zterrainmin)
             try:
                 int(self.sweep_angle)
-                if(len(metMastHeight)==1):
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight+500,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight+500,z,uy)
-                else:
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0]+500,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0]+500,z,uy)
+                height=zterrainmin+metMastHeight[0]+500
             except:
-                if(len(metMastHeight)==1):
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight,z,uy)
-                else:
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0],z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0],z,uy)
-            #print(met_mast_cfd_ux,met_mast_cfd_uy)
+                height=zterrainmin+metMastHeight[0]
+            # try:
+            #     int(self.sweep_angle)
+            #     if(len(metMastHeight)==1):
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight+500,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight+500,z,uy)
+            #     else:
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0]+500,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0]+500,z,uy)
+            # except:
+            #     if(len(metMastHeight)==1):
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight,z,uy)
+            #     else:
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0],z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0],z,uy)
+            met_mast_cfd_ux=np.interp(height,z,ux)
+            met_mast_cfd_uy=np.interp(height,z,uy)
             errx=met_mast_cfd_ux-metMastWind[0]
             erry=met_mast_cfd_uy-metMastWind[1]
             print("%-8s %-7s|%-8s %-7s|%-8s %-7s|%-8s %-7s"%(round(ug[0],2),round(ug[1],2), \
@@ -1144,7 +1190,20 @@ class amrBackend():
             zheight=self.yamlFile["ransDomainTop"]
         except:
             zheight=self.terrainZMax+self.ABLHeight
-        dz=16.0
+        if(mol_length<0):
+            dz=16.0
+        else:
+            # Find the z terrain location for data
+            error=10000 
+            for j in range(0,len(self.terrainX1)):
+                residual=np.sqrt((self.terrainX1[j])**2+(self.terrainX2[j])**2)
+                if(residual<error):
+                    error=residual
+                    xterrain=self.terrainX1[j]
+                    yterrain=self.terrainX2[j]
+                    zterrainmin=self.terrainX3[j]
+            dz=8.0
+            zheight=zterrainmin+metMastHeight[0]+1024
         npts=int(zheight/dz)
         znew=np.linspace(0,zheight,npts)
         amr1D=amr1dSolver(npts,zheight,roughness_length,terrain_ht,pathToWrite)
@@ -1182,21 +1241,26 @@ class amrBackend():
             uy=amr1D.uy
             try:
                 int(self.sweep_angle)
-                if(len(metMastHeight)==1):
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight+500,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight+500,z,uy)
-                else:
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0]+500,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0]+500,z,uy)
+                height=zterrainmin+metMastHeight[0]+500
             except:
-                if(len(metMastHeight)==1):
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight,z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight,z,uy)
-                else:
-                    met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0],z,ux)
-                    met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0],z,uy)
-            #met_mast_cfd_ux=np.interp(metMastHeight,z,ux)
-            #met_mast_cfd_uy=np.interp(metMastHeight,z,uy)
+                height=zterrainmin+metMastHeight[0]
+            # try:
+            #     int(self.sweep_angle)
+            #     if(len(metMastHeight)==1):
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight+500,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight+500,z,uy)
+            #     else:
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0]+500,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0]+500,z,uy)
+            # except:
+            #     if(len(metMastHeight)==1):
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight,z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight,z,uy)
+            #     else:
+            #         met_mast_cfd_ux=np.interp(zterrainmin+metMastHeight[0],z,ux)
+            #         met_mast_cfd_uy=np.interp(zterrainmin+metMastHeight[0],z,uy)
+            met_mast_cfd_ux=np.interp(height,z,ux)
+            met_mast_cfd_uy=np.interp(height,z,uy)
             errx=met_mast_cfd_ux-metMastWind[0]
             erry=met_mast_cfd_uy-metMastWind[1]
             print("%-8s %-7s|%-8s %-7s|%-8s %-7s|%-8s %-7s"%(round(ug[0],2),round(ug[1],2), \

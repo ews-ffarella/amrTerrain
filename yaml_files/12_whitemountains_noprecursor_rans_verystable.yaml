@@ -1,0 +1,15 @@
+# RANS simulation of the White Mountains, New Hampshire, USA
+caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/"
+caseFolder: "12_whitemountains_noprecursor_rans_verystable"
+centerLat: 44.164460
+centerLon: -71.430089
+farmRadius: 25000 
+metMastLatLon: True
+metMastNames: ["mast1"]
+metMastLat: [44.164460]
+metMastLon: [-71.430089]
+metMastWind: [6.0,1.0]
+metMastHeight: [100]
+metMastLineSampling: True 
+molLength: 60.0
+

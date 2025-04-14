@@ -10,7 +10,7 @@ metMastNames: ["mast1"]
 metMastLat: [45.63374]
 metMastLon: [-120.66047]
 metMastWind: [7.071,7.071]
-metMastHeight: 100
+metMastHeight: [100]
 roiLat: [45.53,45.73]
 roiLon: [-120.76,-120.56]
 metMastLineSampling: True 
