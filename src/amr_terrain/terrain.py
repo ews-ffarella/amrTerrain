@@ -21,6 +21,8 @@ from xml.etree import ElementTree as ET
 import elevation
 import numpy as np
 import rasterio
+import rasterio.transform
+import utm
 import xarray as xr
 from rasterio import transform, warp
 from rasterio.crs import CRS
@@ -34,10 +36,41 @@ ISO_namespace = {
 }
 
 
+def check_crs(crs):
+    crs = rasterio.crs.CRS.from_user_input(crs)
+    crs_name = crs.to_wkt().split('"')[1]
+    assert crs.is_projected, f"CRS {crs_name!r} should be projected!"
+    return crs
+
+
+def get_utm_crs(latitude: float, longitude: float, datum="WGS84", ellps="WGS84"):
+    """Get coordinate system from zone number associated with the
+    longitude of the northwest corner
+
+    Parameters
+    ==========
+    datum : str, optional
+        Origin of destination coordinate system, used to describe
+        PROJ.4 string; default is WGS84.
+    ellps : str, optional
+        Ellipsoid defining the shape of the earth in the destination
+        coordinate system, used to describe PROJ.4 string; default
+        is WGS84.
+    """
+
+    _, _, zone_number, _ = utm.from_latlon(latitude, longitude)
+    proj = (
+        f"+proj=utm +zone={zone_number:d} "
+        + f"+datum={datum:s} +units=m +no_defs "
+        + f"+ellps={ellps:s} +towgs84=0,0,0"
+    )
+    return zone_number, CRS.from_proj4(proj)
+
+
 class Terrain:
     latlon_crs = CRS.from_dict(init="epsg:4326")
 
-    def __init__(self, latlon_bounds, fpath="terrain.tif"):
+    def __init__(self, latlon_bounds, fpath="terrain.tif", dst_crs=None):
         """Create container for manipulating GeoTIFF data in the
         specified region
 
@@ -49,36 +82,22 @@ class Terrain:
         fpath : str, optional
             Where to save downloaded GeoTIFF (*.tif) data.
         """
-        self.bounds = list(latlon_bounds)
-        self._get_utm_crs()  # from bounds
+        self.latlon_bounds = list(latlon_bounds)
+
+        if dst_crs is None:
+            self.zone_number, self.dst_crs = get_utm_crs(self.latlon_bounds[0])
+        else:
+            dst_crs = rasterio.crs.CRS.from_user_input(dst_crs)
+            crs_name = dst_crs.to_wkt().split('"')[1]
+            assert dst_crs.is_projected, f"CRS {crs_name!r} should be projected!"
+            self.zone_number = None
+            self.dst_crs = dst_crs
+
         self.tiffdata = fpath
         self.have_terrain = False
         if not hasattr(self, "have_metadata"):
             # set attribute if it hasn't been set already
             self.have_metadata = False
-
-    def _get_utm_crs(self, datum="WGS84", ellps="WGS84"):
-        """Get coordinate system from zone number associated with the
-        longitude of the northwest corner
-
-        Parameters
-        ==========
-        datum : str, optional
-            Origin of destination coordinate system, used to describe
-            PROJ.4 string; default is WGS84.
-        ellps : str, optional
-            Ellipsoid defining the shape of the earth in the destination
-            coordinate system, used to describe PROJ.4 string; default
-            is WGS84.
-        """
-        # west, south, east, north = self.bounds
-        self.zone_number = int((self.bounds[0] + 180) / 6) + 1
-        proj = (
-            f"+proj=utm +zone={self.zone_number:d} "
-            + f"+datum={datum:s} +units=m +no_defs "
-            + f"+ellps={ellps:s} +towgs84=0,0,0"
-        )
-        self.utm_crs = CRS.from_proj4(proj)
 
     def _get_bounds_from_metadata(self):
         """This is a stub"""
@@ -99,24 +118,15 @@ class Terrain:
         if dy is None:
             dy = dx
 
-        # load raster
-        # print("Raster:",self.tiffdata)
         if not os.path.isfile(self.tiffdata):
             raise FileNotFoundError("Need to download()")
 
-        west, south, east, north = self.bounds
-        # print("Bounds:",self.bounds)
+        west, south, east, north = self.latlon_bounds
 
-        with rasterio.open(self.tiffdata) as dem_raster:
-            # get source coordinate reference system, transform
-            src_height, src_width = dem_raster.shape
-            src_crs = dem_raster.crs
-            src_transform = transform.from_bounds(*self.bounds, src_width, src_height)
-            src = dem_raster.read(1)
+        dst_crs = self.dst_crs
+        src_crs = self.latlon_crs
 
         # calculate destination coordinate reference system, transform
-        dst_crs = self.utm_crs
-        # print('Projecting from',src_crs,'to',dst_crs)
         # - get origin (the _upper_ left corner) from bounds
         orix, oriy = self.to_xy(north, west)
         origin = (orix, oriy)
@@ -129,23 +139,26 @@ class Terrain:
         Nx = int(Lx / dx)
         Ny = int(Ly / dy)
 
-        # reproject to uniform grid in the UTM CRS
+        # reproject to uniform grid in the projected CRS
         dem_array = np.empty((Ny, Nx))
-        warp.reproject(
-            src,
-            dem_array,
-            src_transform=src_transform,
-            src_crs=src_crs,
-            dst_transform=dst_transform,
-            dst_crs=dst_crs,
-            resampling=resampling,
-        )
-        utmx = orix + np.arange(0, Nx * dx, dx)
-        utmy = oriy + np.arange((-Ny + 1) * dy, dy, dy)
-        self.x, self.y = np.meshgrid(utmx, utmy, indexing="ij")
+
+        with rasterio.open(self.tiffdata) as src:
+            # print(f"Reprojecting from {src_crs} to {dst_crs} ... ")
+            warp.reproject(
+                rasterio.band(src, 1),
+                dem_array,
+                src_transform=src.transform,
+                src_crs=src_crs,
+                dst_transform=dst_transform,
+                dst_crs=dst_crs,
+                resampling=resampling,
+            )
+        proj_x = orix + np.arange(0, Nx * dx, dx)
+        proj_y = oriy + np.arange((-Ny + 1) * dy, dy, dy)
+        self.x, self.y = np.meshgrid(proj_x, proj_y, indexing="ij")
         self.z = np.flipud(dem_array).T
 
-        self.zfun = RectBivariateSpline(utmx, utmy, self.z)
+        self.zfun = RectBivariateSpline(proj_x, proj_y, self.z)
         self.have_terrain = True
 
         return self.x, self.y, self.z
@@ -156,7 +169,7 @@ class Terrain:
             assert ~hasattr(x, "__iter__")
             x = [x]
             y = [y]
-        xlon, xlat = warp.transform(self.utm_crs, self.latlon_crs, x, y)
+        xlon, xlat = warp.transform(self.dst_crs, self.latlon_crs, x, y)
         try:
             shape = x.shape
         except AttributeError:
@@ -173,7 +186,7 @@ class Terrain:
             assert ~hasattr(lat, "__iter__")
             lat = [lat]
             lon = [lon]
-        x, y = warp.transform(self.latlon_crs, self.utm_crs, lon, lat)
+        x, y = warp.transform(self.latlon_crs, self.dst_crs, lon, lat)
         try:
             shape = lon.shape
         except AttributeError:
@@ -308,7 +321,7 @@ class SRTM(Terrain):
         # escapedpath = self.tiffdata.replace('\ ',' ').replace(' ','\ ')
         escapedpath = self.tiffdata
         try:
-            elevation.clip(self.bounds, product=self.product, output=escapedpath)
+            elevation.clip(self.latlon_bounds, product=self.product, output=escapedpath)
         except:
             info = sys.exc_info()
             print(info[0])
@@ -469,7 +482,7 @@ def combine_raster_data(filelist, dtype=Terrain, latlon_bounds=None, output="out
     # get global bounds
     bounds = np.empty((len(filelist), 4))
     for i, data in enumerate(terraindata):
-        bounds[i, :] = data.bounds
+        bounds[i, :] = data.latlon_bounds
     bounds_min = bounds.min(axis=0)
     bounds_max = bounds.max(axis=0)
     return [bounds_min[0], bounds_min[1], bounds_max[2], bounds_max[3]]

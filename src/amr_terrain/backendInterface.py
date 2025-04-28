@@ -12,11 +12,14 @@ from sys import argv
 import numpy as np
 import pyvista as pv
 import rasterio
+import rasterio.crs
+import rasterio.warp
 import utm
 import yaml
 from scipy.interpolate import NearestNDInterpolator
 
 from amr_terrain.amr1DSolver import amr1dSolver
+from amr_terrain.terrain import Terrain, check_crs, get_utm_crs
 
 
 class amrBackend:
@@ -46,6 +49,13 @@ class amrBackend:
         # 3 - Farm (even for precursor)
         self.caseCenterLat = self.yamlFile["centerLat"]
         self.caseCenterLon = self.yamlFile["centerLon"]
+        self.caseCRS = None
+        try:
+            crs = check_crs(self.yamlFile["caseCRS"])
+        except KeyError:
+            _, crs = get_utm_crs(self.caseCenterLat, self.caseCenterLon)
+        self.caseCRS = crs
+
         # Method 1 - Assuming a circular farm but amr-wind uses rectangular grid so using inscribed circle
         try:
             farmRadius = self.yamlFile["farmRadius"]
@@ -212,56 +222,71 @@ class amrBackend:
             self.write_stl = False
         try:
             self.terrainSTL = self.yamlFile["terrainSTL"]
-        except:
-            import amr_terrain.SRTM_to_STL_example as converter
+        except KeyError:
+            self.terrainSTL = ""
 
-            self.srtm_output = ""
+        if not self.terrainSTL:
             try:
-                self.usetiff = self.yamlFile["useTiff"]
-            except:
-                self.usetiff = " "
-                westlon = -0.5
-                eastlon = 0.5
-                southlat = -0.5
-                northlat = 0.5
-            else:
-                with rasterio.open(self.usetiff) as dataset:
-                    westlon = dataset.bounds[0] - self.caseCenterLon
-                    eastlon = dataset.bounds[2] - self.caseCenterLon
-                    southlat = dataset.bounds[1] - self.caseCenterLat
-                    northlat = dataset.bounds[3] - self.caseCenterLat
-            try:
-                self.xref, self.yref, self.zRef, self.srtm, self.zone_number, self.srtm_output = (
-                    converter.SRTM_Converter(
-                        Path(self.caseParent, self.caseName).as_posix(),
-                        self.caseCenterLat,
-                        self.caseCenterLon,
-                        self.refHeight,
-                        self.caseWest,
-                        self.caseEast,
-                        self.caseSouth,
-                        self.caseNorth,
-                        self.caseWestSlope,
-                        self.caseEastSlope,
-                        self.caseSouthSlope,
-                        self.caseNorthSlope,
-                        self.caseWestFlat,
-                        self.caseEastFlat,
-                        self.caseSouthFlat,
-                        self.caseNorthFlat,
-                        self.usetiff,
-                        self.write_stl,
-                        westlon,
-                        eastlon,
-                        southlat,
-                        northlat,
-                        product=self.yamlFile.get("elevationProduct", "SRTM1"),
-                        do_plot=bool(self.yamlFile.get("elevationShowPlots", True)),
-                        ds=float(self.yamlFile.get("elevationResolution", 10.0)),
+                import amr_terrain.SRTM_to_STL_example as converter
+
+                self.srtm_output = ""
+                try:
+                    self.usetiff = self.yamlFile["useTiff"]
+                except:
+                    self.usetiff = " "
+                    westlon = -0.5
+                    eastlon = 0.5
+                    southlat = -0.5
+                    northlat = 0.5
+                else:
+                    with rasterio.open(self.usetiff) as src:
+                        bounds = src.bounds
+                        if src.crs != Terrain.latlon_crs:
+                            transform, width, height = rasterio.warp.calculate_default_transform(
+                                src.crs,
+                                Terrain.latlon_crs,
+                                src.width,
+                                src.height,
+                                *src.bounds,
+                            )
+                            bounds = rasterio.transform.array_bounds(height, width, transform)
+
+                        westlon = bounds[0] - self.caseCenterLon
+                        eastlon = bounds[2] - self.caseCenterLon
+                        southlat = bounds[1] - self.caseCenterLat
+                        northlat = bounds[3] - self.caseCenterLat
+
+                    self.xref, self.yref, self.zRef, self.srtm, self.zone_number, self.srtm_output = (
+                        converter.SRTM_Converter(
+                            Path(self.caseParent, self.caseName).as_posix(),
+                            self.caseCenterLat,
+                            self.caseCenterLon,
+                            self.refHeight,
+                            self.caseWest,
+                            self.caseEast,
+                            self.caseSouth,
+                            self.caseNorth,
+                            self.caseWestSlope,
+                            self.caseEastSlope,
+                            self.caseSouthSlope,
+                            self.caseNorthSlope,
+                            self.caseWestFlat,
+                            self.caseEastFlat,
+                            self.caseSouthFlat,
+                            self.caseNorthFlat,
+                            self.usetiff,
+                            self.write_stl,
+                            westlon,
+                            eastlon,
+                            southlat,
+                            northlat,
+                            product=self.yamlFile.get("elevationProduct", "SRTM1"),
+                            do_plot=bool(self.yamlFile.get("elevationShowPlots", True)),
+                            ds=float(self.yamlFile.get("elevationResolution", 10.0)),
+                            dst_crs=self.caseCRS,
+                        )
                     )
-                )
-            except Exception as e:
-                raise e
+            except:
                 print("Cannot connect to internet to download file")
                 exit(-1)
         else:
@@ -484,7 +509,7 @@ class amrBackend:
             elev += float(self.zRef)
 
         zfun = RectBivariateSpline(xs, ys, elev.T)
-        return xs, ys, transform, elev, zfun
+        return xs, ys, elev, zfun, transform
 
     def createAMRGeometry(self, target, periodic=-1):
         if target:

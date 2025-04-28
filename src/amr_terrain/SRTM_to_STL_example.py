@@ -3,7 +3,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
-import utm
 from matplotlib.patches import Rectangle
 from scipy.interpolate import RectBivariateSpline
 
@@ -36,6 +35,7 @@ def SRTM_Converter(
     product="SRTM1",
     do_plot=True,
     ds=None,
+    dst_crs=None,
 ):
     # # Terrain-Resolved Domain Setup
     # This notebook will generate a surface geometry file to be used by the microscale solver (e.g., SOWFA) to conform the solver domain to the terrain (e.g., with `moveDynamicMesh`).
@@ -71,7 +71,7 @@ def SRTM_Converter(
     fringe_e = slope_east
     tiffile = use_tiff
 
-    srtm_bounds = (
+    latlon_bounds = (
         refloc[1] + longmin,
         refloc[0] + latmin,
         refloc[1] + longmax,
@@ -99,17 +99,17 @@ def SRTM_Converter(
         srtm_output = tiffile
 
     if tiffile == " ":
-        srtm = SRTM(srtm_bounds, fpath=srtm_output, product=product)
+        srtm = SRTM(latlon_bounds, fpath=srtm_output, product=product)
         srtm.download()
         print(f"output tiff: {tiffile}", flush=True)
     else:
-        srtm = Terrain(srtm_bounds, fpath=srtm_output)
+        srtm = Terrain(latlon_bounds, fpath=srtm_output, dst_crs=dst_crs)
 
     x1 = np.arange(xmin, xmax, ds)
     y1 = np.arange(ymin, ymax, ds)
     xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
     x, y, z = srtm.to_terrain(dx=ds)
-    xref, yref, _, _ = utm.from_latlon(*refloc[:2], force_zone_number=srtm.zone_number)
+    xref, yref = srtm.to_xy(*refloc[:2])
     vmin, vmax = 1500, 2500
     if refloc[0] < 0:
         yref = yref - 10000000
