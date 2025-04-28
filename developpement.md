@@ -46,7 +46,7 @@ Register our kernel
 uv run ipython kernel install --user --env VIRTUAL_ENV $(pwd)/.venv --name="amr-terrain"
 ```
 
-From there, start the server with (see [here](https://github.com/EWS-Consulting-Private/edv-jupyterhub/blob/main/docker_images/dockerfiles/Dockerfile.jupyterhub)):
+From there, start the server with:
 
 ```bash
 uv run \
