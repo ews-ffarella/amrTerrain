@@ -7,7 +7,7 @@ import utm
 from matplotlib.patches import Rectangle
 from scipy.interpolate import RectBivariateSpline
 
-from amr_terrain.terrain import SRTM
+from amr_terrain.terrain import SRTM, Terrain
 
 
 def SRTM_Converter(
@@ -98,11 +98,12 @@ def SRTM_Converter(
     else:
         srtm_output = tiffile
 
-    srtm = SRTM(srtm_bounds, fpath=srtm_output, product=product)
-
     if tiffile == " ":
+        srtm = SRTM(srtm_bounds, fpath=srtm_output, product=product)
         srtm.download()
         print(f"output tiff: {tiffile}", flush=True)
+    else:
+        srtm = Terrain(srtm_bounds, fpath=srtm_output)
 
     x1 = np.arange(xmin, xmax, ds)
     y1 = np.arange(ymin, ymax, ds)
