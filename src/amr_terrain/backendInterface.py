@@ -57,7 +57,7 @@ class amrBackend:
         self.caseCRS = crs
 
         crs_name = self.caseCRS.to_wkt().split('"')[1]
-        print(f"The domain will be created using the projection {crs_name!r}")
+        print(f"The domain will be created using the projection {crs_name!r}.")
 
         # Method 1 - Assuming a circular farm but amr-wind uses rectangular grid so using inscribed circle
         try:
@@ -198,7 +198,7 @@ class amrBackend:
             self.metmast_damping_radius = 100.0
 
     def createCase(self):
-        caseDir = Path(self.caseParent, self.caseName)
+        caseDir = Path(self.caseParent, self.caseName).resolve().absolute()
         self.caseDir = caseDir.as_posix()
         caseDir.mkdir(parents=True, exist_ok=True)
 
@@ -485,10 +485,10 @@ class amrBackend:
             xs += self.xref
             ys += self.yref
 
-        dx = np.unique(np.diff(xs))
+        dx = np.unique(np.diff(xs).round(2))
         assert dx.size == 1
         dx = dx[0]
-        dy = np.unique(np.diff(ys))
+        dy = np.unique(np.diff(ys).round(2))
         assert dy.size == 1
         dy = dy[0]
 

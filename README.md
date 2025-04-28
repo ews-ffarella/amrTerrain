@@ -24,7 +24,11 @@ This option is useful for generating tiff files when the domain size is larger t
 
 ### Sample Workflow 
 
-The input files are created by running python src/backend/backendinterface.py pathtoyamlfile 
+After having installed `amr-terrain`, the input files are created by running:
+
+```
+amrTerrain pathtoyamlfile
+```
 
 A sample yaml file is discussed below below. 
 

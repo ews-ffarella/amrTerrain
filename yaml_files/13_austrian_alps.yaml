@@ -1,0 +1,37 @@
+caseParent: "./test_runs"
+caseFolder: "13_austrian_alps"
+caseType: terrain_noprecursor
+caseCRS : "EPSG:3416"
+
+elevationProduct: "DTM_Austria"
+elevationShowPlots: true
+elevationResolution: 10.0
+writeTerrain: true
+useTiff: "./yaml_files/elevation_dtm_austria.tif"
+
+# Domain area
+centerLat: 46.661497
+centerLon: 15.009219
+
+cellSize: 200
+verticalAR: 5
+
+west: 16353.511
+south: 16346.708
+east: 15646.489
+north: 18853.292
+# Slope area
+westSlope: 3400.0
+southSlope: 4000.0
+eastSlope: 2800.0
+northSlope: 6600.0
+# Flat area
+westFlat: 2700.0
+eastFlat: 2700.0
+southFlat: 2000.0
+northFlat: 2000.0
+
+initialUG: 9.82  
+initialVG: -0.29
+
+
