@@ -155,10 +155,9 @@ def SRTM_Converter(
 
     xsurf, ysurf = np.meshgrid(x1, y1, indexing="xy")
     zsrtm = np.flipud(zsrtm.T)
-    transform = rasterio.transform.from_bounds(xmin, ymin, xmax, ymax, x1.size, y1.size)
-    # TODO: This is sloppy ...
-    assert np.abs(transform.a - ds) < 1e-2, (transform.a, ds)
-    assert np.abs(-transform.e - ds) < 1e-2, (-transform.e, ds)
+    transform = rasterio.transform.from_bounds(
+        x1[0] - 0.5 * ds, y1[0] - 0.5 * ds, x1[-1] + 0.5 * ds, y1[-1] + 0.5 * ds, x1.size, y1.size
+    )
     domain_area = sbox(
         xmin + (flat_west + slope_west),
         ymin + (flat_south + slope_south),
@@ -213,7 +212,7 @@ def SRTM_Converter(
     # check distance from south boundary
     blend_s = np.ones(xsurf.shape)
     if slope_south > 0:
-        blend_s = (
+        blend_s = np.flipud(
             np.maximum(
                 np.minimum(
                     (ysurf - (ymin + flat_south)) / slope_south,
@@ -221,14 +220,12 @@ def SRTM_Converter(
                 ),
                 0,
             )
-            .T[:, ::-1]
-            .T
         )
 
     # check distance from north boundary
     blend_n = np.ones(xsurf.shape)
     if slope_north > 0:
-        blend_n = (
+        blend_n = np.flipud(
             np.maximum(
                 np.minimum(
                     ((ymax - flat_north) - ysurf) / slope_north,
@@ -236,8 +233,6 @@ def SRTM_Converter(
                 ),
                 0,
             )
-            .T[:, ::-1]
-            .T
         )
 
     # combine blending functions
