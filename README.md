@@ -222,6 +222,30 @@ verticalLevels: [10,80,100,200]
 
 The distances in verticalLevels are measured from the terrain in m. A postprocessing script is included to convert the amrex format of output to vtk for plotting. 
 
+## Workflow 
+
+The workflow for immersed forcing simulation is determined by the input 
+
+caseType: "precursor"/"terrain"/"terrain_noprecursor"/"terrainTurbine"
+
+The precursor mode does not require the python scripts and is included for backwards compatibility. The caseType: "terrain" is the older mode of execution in AMR - Wind. In this method a precursor simulation is performed using RANS/LES model on a domain with periodic boundary condition. Boundary planes are created and used as inflow in the inflow-outflow successor simulations. This workflow is currently used only for generating data for FAST.Farm simulations and model testing. 
+
+The caseType: "terrainTurbine" is used for comparion of the ALM model in AMR-Wind and FAST.Farm simulations. The development is currently frozen due to code changes in other modules. It will be updated in the future. 
+
+The caseType: "terrain_noprecursor" is the default mode of execution of the python module. In this workflow a single simulation is run with RANS/LES model on complex terrain. The boundary conditions are provided by the output from the 1-D RANS solver. It is possible to add perturbation forcing to the AMR - Wind simulations when LES model is chosen. This is currently not supported from the python module and the user has to add it manually. See example here: https://github.com/Exawind/amr-wind/blob/main/test/test_files/noprecursor_les_pert/noprecursor_les_pert.inp
+
+It is possible that the user wants to use alternative inputs to 1-D RANS solver for the driving profile. AMR - Wind has support for two methods to do it. (i) 1-D MMC and (ii) 2-D MMC. The 2-D MMC method is currently under development. The 1-D MMC approach can be used with the following manual modification. 
+
+1. Replace the ABL.rans_1dprofile_file                            = "rans_1d.info"  with the single column input data from WRF. The file requires the following columns of input: z u v w tke.
+2. Temperature profiles are not digested from the profiles file but have to be specified separately. The single column input data from WRF can be included here:
+
+ABL.temperature_heights                            = 0  16.0669   ......
+ABL.temperature_values                             = 300  300 .......
+
+I am not sure how the WRF-driven forcing works with Geostrophic forcing enabled and what should be used for the Geostrophic wind profile.The 1-D and 2-D MMC support will be updated in the future. 
+
+## 1-D Solver Execution 
+
 
 
 
