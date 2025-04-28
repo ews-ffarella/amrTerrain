@@ -246,6 +246,55 @@ I am not sure how the WRF-driven forcing works with Geostrophic forcing enabled 
 
 ## 1-D Solver Execution 
 
+The 1-D solver computes the geostrophic wind required to match the wind speed to values at the met mast location. For example with the following inputs: 
+
+metMastLat: [44.164460]
+metMastLon: [-71.430089]
+metMastWind: [7.071,7.071]
+metMastHeight: [100]
+
+The 1-D solver is run until the metMastWind speed matches the metMastWind within 0.25 m/s or user-specified value as follows: 
+
+allowedError: 0.25 
+
+The user can also provide an input to the initial geostrophic wind with following inputs: 
+
+initialUG: 10 
+initialVG: 0 
+
+The 1-D solver is optional for LES simulations and is enforced for RANS. 
+
+## Experimental Features 
+
+### Met Mast Forcing 
+
+Met mast forcing is currently being developed. This requires following inputs from the user: 
+
+metmast_horizontal_radius: 500 
+metmast_vertical_radius: 200 
+metmast_damping_radius: 200 
+
+This creates a metmast.info file in the case folder for each entry in metMastNames. In future support will be added to include different metmast radius for each metMast. The metMastForcing is implemented as a subset of the method used in WRF using inverse distance weighting. 
+
+### Terrain Enhancements 
+
+The current algorithm for considering the terrain region uses a simple binary marking of 1/0 for terrain or no-terrain. This method with AMR should be able to reproduce the results well on complex terrains. However, it is possible that it may not be sufficient for certain cases. Two new developments are being considered: 
+
+#### Enhanced Marking 
+
+In this method, the terrain checking is done both in the vertical and horizontal direction. This capability is currently not available in the main branch of AMR - Wind and a separate sub-branch is required: https://github.com/hgopalan/amr-wind/tree/building_drag. The only input change required is the inclusion of the following line in the input file: 
+
+DragForcing.horizontal_drag_model = true 
+
+#### Cut-Cell Marking 
+
+The terrain is marked as a binary change between terrain and air region. So cells are marked as 1 (terrain) or 0 (no terrain). No fractional values are included in the preprocessing stage. The solver on the other hand allows fractional changes and any value in the range 0-1 is allowed. The cut-cell marking algorithm allows for a simple rectangular cut to create partial terrain. This capability is availavble in the sub-branch: https://github.com/hgopalan/amr-wind/tree/terrain_vof  and is enabled in the code by adding the following inputs: 
+
+TerrainDrag.terrain_cut_model = "cut-cell"
+
+In the future the EB capability of AMReX may be considered to replace the cut-cell model. 
+
+
 
 
 
