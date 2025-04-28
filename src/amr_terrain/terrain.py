@@ -103,15 +103,16 @@ class Terrain:
         # print("Raster:",self.tiffdata)
         if not os.path.isfile(self.tiffdata):
             raise FileNotFoundError("Need to download()")
-        dem_raster = rasterio.open(self.tiffdata)
 
-        # get source coordinate reference system, transform
         west, south, east, north = self.bounds
         # print("Bounds:",self.bounds)
-        src_height, src_width = dem_raster.shape
-        src_crs = dem_raster.crs
-        src_transform = transform.from_bounds(*self.bounds, src_width, src_height)
-        src = dem_raster.read(1)
+
+        with rasterio.open(self.tiffdata) as dem_raster:
+            # get source coordinate reference system, transform
+            src_height, src_width = dem_raster.shape
+            src_crs = dem_raster.crs
+            src_transform = transform.from_bounds(*self.bounds, src_width, src_height)
+            src = dem_raster.read(1)
 
         # calculate destination coordinate reference system, transform
         dst_crs = self.utm_crs

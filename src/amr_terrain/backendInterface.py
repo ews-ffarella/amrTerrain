@@ -215,6 +215,7 @@ class amrBackend:
         except:
             import amr_terrain.SRTM_to_STL_example as converter
 
+            self.srtm_output = ""
             try:
                 self.usetiff = self.yamlFile["useTiff"]
             except:
@@ -230,31 +231,35 @@ class amrBackend:
                     southlat = dataset.bounds[1] - self.caseCenterLat
                     northlat = dataset.bounds[3] - self.caseCenterLat
             try:
-                self.xref, self.yref, self.zRef, self.srtm, self.zone_number = converter.SRTM_Converter(
-                    Path(self.caseParent, self.caseName).as_posix(),
-                    self.caseCenterLat,
-                    self.caseCenterLon,
-                    self.refHeight,
-                    self.caseWest,
-                    self.caseEast,
-                    self.caseSouth,
-                    self.caseNorth,
-                    self.caseWestSlope,
-                    self.caseEastSlope,
-                    self.caseSouthSlope,
-                    self.caseNorthSlope,
-                    self.caseWestFlat,
-                    self.caseEastFlat,
-                    self.caseSouthFlat,
-                    self.caseNorthFlat,
-                    self.usetiff,
-                    self.write_stl,
-                    westlon,
-                    eastlon,
-                    southlat,
-                    northlat,
+                self.xref, self.yref, self.zRef, self.srtm, self.zone_number, self.srtm_output = (
+                    converter.SRTM_Converter(
+                        Path(self.caseParent, self.caseName).as_posix(),
+                        self.caseCenterLat,
+                        self.caseCenterLon,
+                        self.refHeight,
+                        self.caseWest,
+                        self.caseEast,
+                        self.caseSouth,
+                        self.caseNorth,
+                        self.caseWestSlope,
+                        self.caseEastSlope,
+                        self.caseSouthSlope,
+                        self.caseNorthSlope,
+                        self.caseWestFlat,
+                        self.caseEastFlat,
+                        self.caseSouthFlat,
+                        self.caseNorthFlat,
+                        self.usetiff,
+                        self.write_stl,
+                        westlon,
+                        eastlon,
+                        southlat,
+                        northlat,
+                        product=self.yamlFile.get("elevationProduct", "SRTM1"),
+                        do_plot=bool(self.yamlFile.get("elevationShowPlots", True)),
+                        ds=float(self.yamlFile.get("elevationResolution", 10.0)),
+                    )
                 )
-            # -3,3,-1.5,1.5)
             except Exception as e:
                 raise e
                 print("Cannot connect to internet to download file")
@@ -446,8 +451,44 @@ class amrBackend:
         # self.metMastRefinement(self.amrTerrainFile)
         # self.metMastMonitoring(self.amrTerrainFile)
 
+    def createElevationInterpolator(self, as_cfd=False):
+        xs = np.sort(np.unique(self.terrainX1.tolist()))
+        ys = np.sort(np.unique(self.terrainX2.tolist()))
+
+        if not as_cfd:
+            xs += self.xref
+            ys += self.yref
+
+        dx = np.unique(np.diff(xs))
+        assert dx.size == 1
+        dx = dx[0]
+        dy = np.unique(np.diff(ys))
+        assert dy.size == 1
+        dy = dy[0]
+
+        transform = rasterio.transform.from_bounds(
+            xs[0] - 0.5 * dx,
+            ys[0] - 0.5 * dy,
+            xs[-1] + 0.5 * dx,
+            ys[-1] + 0.5 * dy,
+            xs.size,
+            ys.size,
+        )
+        assert transform.a == dx
+        assert -transform.e == dy
+
+        from scipy.interpolate import RectBivariateSpline
+
+        elev = np.asarray(self.terrainX3.reshape(ys.size, xs.size))
+        if not as_cfd:
+            elev += float(self.zRef)
+
+        zfun = RectBivariateSpline(xs, ys, elev.T)
+        return xs, ys, transform, elev, zfun
+
     def createAMRGeometry(self, target, periodic=-1):
-        target.write("# Geometry\n")
+        if target:
+            target.write("# Geometry\n")
         minX = np.amin(self.terrainX1)
         minY = np.amin(self.terrainX2)
         minZ = np.amin(self.terrainX3)
@@ -463,13 +504,14 @@ class amrBackend:
         self.ABLHeight = max(self.terrainZMax, 2048)
         self.RDLHeight = max(self.terrainZMax, 2048)
         self.maxZ = self.terrainZMax + self.ABLHeight + self.RDLHeight
-        # print(self.terrainZMax,self.ABLHeight,self.RDLHeight,self.maxZ)
-        target.write("%-50s = %g %g %g \n" % ("geometry.prob_lo", minX, minY, minZ))
-        target.write("%-50s = %g %g %g \n" % ("geometry.prob_hi", maxX, maxY, self.maxZ))
-        if periodic == 1:
-            target.write("%-50s = 1 1 0\n" % ("geometry.is_periodic"))
-        else:
-            target.write("%-50s = 0 0 0\n" % ("geometry.is_periodic"))
+
+        if target:
+            target.write("%-50s = %g %g %g \n" % ("geometry.prob_lo", minX, minY, minZ))
+            target.write("%-50s = %g %g %g \n" % ("geometry.prob_hi", maxX, maxY, self.maxZ))
+            if periodic == 1:
+                target.write("%-50s = 1 1 0\n" % ("geometry.is_periodic"))
+            else:
+                target.write("%-50s = 0 0 0\n" % ("geometry.is_periodic"))
 
     def createAMRGrid(self, target):
         nx = int((np.amax(self.terrainX1) - np.amin(self.terrainX1)) / self.caseCellSize)
@@ -482,9 +524,10 @@ class amrBackend:
         while nz % 8 != 0:
             nz = nz + 1
         # print("dx,dz",self.caseCellSize,self.maxZ/nz)
-        target.write("# Grid \n")
-        target.write("%-50s = %g %g %g\n" % ("amr.n_cell", nx, ny, nz))
-        # target.write("%-50s = 0\n"%("amr.max_level"))
+        if target:
+            target.write("# Grid \n")
+            target.write("%-50s = %g %g %g\n" % ("amr.n_cell", nx, ny, nz))
+        return nx, ny, nz
 
     def createAMRTime(self, target, blanking=-1):
         if self.caseType == "terrain_noprecursor":

@@ -33,6 +33,9 @@ def SRTM_Converter(
     longmax,
     latmin,
     latmax,
+    product="SRTM1",
+    do_plot=True,
+    ds=None,
 ):
     # # Terrain-Resolved Domain Setup
     # This notebook will generate a surface geometry file to be used by the microscale solver (e.g., SOWFA) to conform the solver domain to the terrain (e.g., with `moveDynamicMesh`).
@@ -44,12 +47,6 @@ def SRTM_Converter(
     # Output directory (absolute dir)
     outdir = outputDir
 
-    # ### 1.2 Microscale parameters
-    #
-    # First, set the resolution of the data the STL will be created from, and the output resolution.
-    product = "SRTM1"  # SRTM1 | SRTM3 (30- and 90-m DEM)
-    ds = 30.0  # output resolution
-
     # The following cell should be modified by the user, following the examples given. The cell contains information about the actual location to be saved.
     #
     # The `refloc` variable is the location coresponding to (0,0) in SOWFA.
@@ -60,9 +57,6 @@ def SRTM_Converter(
     #
     # With respect to the bounding box, it is nice to have the boundaries exactly where the mesh would go because of the blending. For instance, a 5x5 km domain needs to match all the levels of cells: 20, 40, 80, 160 m. Essentially, 5000/160 needs to be an integer number, the same way 5000/80 needs to be as well. However, we only really need to match the coarsest resolution because they are multiple. Finally, an extra fringe of width `ds` (the resolution set above) is added, half on each side. The desired bounding box should go into the `xmin`,`xmax`,`ymin`,`ymax` variables, ignoring the `ds` addition. This extra fringe is to ensure that the STL is slighly larger than the bounding box that will be set on the microscale solver (needed in OpenFOAM to avoid numerical issues).
 
-    # For WFIP2 region
-    # - blend to flat
-    # refloc = (45.638004, -120.642973, 495) # biglow PS12 met mast
     refloc = (refLat, refLon, refHeight)
     xmin, xmax = -left, right
     ymin, ymax = -bottom, top
@@ -76,22 +70,24 @@ def SRTM_Converter(
     fringe_n = slope_north
     fringe_e = slope_east
     tiffile = use_tiff
-    case = f"wfip_xm{abs(int(xmin))}to{int(xmax)}_ym{abs(int(ymin))}to{int(ymax)}_blendFlat3N3S3E3W_ff{fringe_flat_w}"
 
-    x1 = np.arange(xmin, xmax, ds)
-    y1 = np.arange(ymin, ymax, ds)
-    xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
-    # print('The output bounding box is')
-    # print('xmin: ',xsurf[0,0], '\nxmax: ',xsurf[-1,-1])
-    # print('ymin: ',ysurf[0,0], '\nymax: ',ysurf[-1,-1])
-    # Terrain region to clip from the digital elevation model (DEM)
-    # srtm_bounds = west, south, east, north = (refloc[1]-0.5, refloc[0]-0.4, refloc[1]+0.62, refloc[0]+0.42)
-    srtm_bounds = west, south, east, north = (
+    srtm_bounds = (
         refloc[1] + longmin,
         refloc[0] + latmin,
         refloc[1] + longmax,
         refloc[0] + latmax,
     )
+
+    if tiffile == " ":
+        available_products = list(SRTM.data_products.keys())
+        assert product in available_products, available_products
+        ds = SRTM.data_products[product]
+    else:
+        assert ds is not None, ds
+        assert ds > 0, ds
+
+    case = f"wfip_xm{abs(int(xmin))}to{int(xmax)}_ym{abs(int(ymin))}to{int(ymax)}_blendFlat3N3S3E3W_ff{fringe_flat_w}"
+
     # this will be downloaded:
     # srtm_output=f'{outdir}/{case}.tif' # need absolute path for GDAL
     # Get the absolute path needed for CGAL
@@ -101,24 +97,25 @@ def SRTM_Converter(
         pass
     else:
         srtm_output = tiffile
-        # print("SRTM:",srtm_output)
+
     srtm = SRTM(srtm_bounds, fpath=srtm_output, product=product)
+
     if tiffile == " ":
         srtm.download()
         print(f"output tiff: {tiffile}", flush=True)
-    x, y, z = srtm.to_terrain()
+
+    x1 = np.arange(xmin, xmax, ds)
+    y1 = np.arange(ymin, ymax, ds)
+    xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
+    x, y, z = srtm.to_terrain(dx=ds)
     xref, yref, _, _ = utm.from_latlon(*refloc[:2], force_zone_number=srtm.zone_number)
     vmin, vmax = 1500, 2500
     if refloc[0] < 0:
         yref = yref - 10000000
-    # print(np.amax(x),np.amin(x),np.amax(x)-np.amin(x))
-    # print(np.amax(y),np.amin(y),np.amax(y)-np.amin(y))
-    # #y=y+yref-0.5*(np.amax(y)+np.amin(y))
-    # print("Center:",0.5*(np.amax(y)+np.amin(y)))
-    # print("After mixing:",np.amax(y),np.amin(y),np.amax(y)-np.amin(y))
+
     if np.amin(z) < 0:
         z[z < 0] = 0
-    # exit(-1)
+
     if write_stl:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(x - xref, y - yref, z, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
@@ -149,7 +146,7 @@ def SRTM_Converter(
     # resampled SRTM data stored in 'zsrtm'
     zsrtm = interpfun(x1, y1, grid=True)
 
-    if write_stl:
+    if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(xsurf, ysurf, zsrtm, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
         cb = fig.colorbar(cm, ax=ax)
@@ -160,7 +157,7 @@ def SRTM_Converter(
         ax.set_title(f"{product} terrain height")
         ax.axis("scaled")
 
-        fig.savefig(f"{outdir}/elevation_srtm_{case}.png", dpi=150, bbox_inches="tight")
+        fig.savefig(f"{outdir}/elevation_{product.lower()}_{case}.png", dpi=150, bbox_inches="tight")
 
     # ## 4. Get the low-resolution terrain from the mesoscale
     # This part is only relevant if the user chose to blen the high-resolution SRTM terrain data with WRF
@@ -190,7 +187,7 @@ def SRTM_Converter(
     # combine blending functions
     blend = blend_w * blend_e * blend_s * blend_n
 
-    if write_stl:
+    if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(xsurf, ysurf, blend, cmap="magma")
         cb = fig.colorbar(cm, ax=ax)
@@ -199,9 +196,6 @@ def SRTM_Converter(
         ax.set_ylabel("northing [m]")
         ax.set_title("blending function")
         ax.axis("scaled")
-        # plt.show()
-
-    # exit(-1)
 
     # create flat surface to be blended
     # SRTM data is unlikely to be around the z=0 mark, so get the average
@@ -214,7 +208,7 @@ def SRTM_Converter(
     # now, blend the high/low resolution elevations
     zblend = blend * zsrtm + (1 - blend) * zlowres
 
-    if write_stl:
+    if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(xsurf, ysurf, zblend, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
         cb = fig.colorbar(cm, ax=ax)
@@ -235,7 +229,7 @@ def SRTM_Converter(
         case = case + "_flatz0"
 
     if shiftFlatToZero:
-        if write_stl:
+        if write_stl and do_plot:
             fig, ax = plt.subplots(figsize=(12, 8))
             cm = ax.pcolormesh(xsurf, ysurf, zblend, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
             cb = fig.colorbar(cm, ax=ax)
@@ -255,4 +249,4 @@ def SRTM_Converter(
     mesh = pv.PolyData(data)
     vtkout = f"{outdir}/terrain.vtk"
     mesh.save(vtkout)
-    return xref, yref, zTerrainRef, srtm, srtm.zone_number
+    return xref, yref, zTerrainRef, srtm, srtm.zone_number, srtm_output
