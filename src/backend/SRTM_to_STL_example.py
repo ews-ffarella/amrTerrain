@@ -53,15 +53,15 @@ def SRTM_Converter(outputDir,refLat,refLon,refHeight,left,right,bottom,top, \
     # ymin,ymax = -bottom-ds/2,top+ds/2
     xmin,xmax=-left,right
     ymin,ymax=-bottom,top
-    fringe_flat_w=slope_west
-    fringe_flat_s=slope_south
-    fringe_flat_n=slope_north
-    fringe_flat_e=slope_east
+    fringe_flat_w=flat_west
+    fringe_flat_s=flat_south
+    fringe_flat_n=flat_north
+    fringe_flat_e=flat_east
     shiftFlatToZero=True
-    fringe_w = flat_west
-    fringe_s = flat_south
-    fringe_n = flat_north
-    fringe_e = flat_east
+    fringe_w = slope_west
+    fringe_s = slope_south
+    fringe_n = slope_north
+    fringe_e = slope_east
     tiffile=use_tiff
     case = f'wfip_xm{abs(int(xmin))}to{int(xmax)}_ym{abs(int(ymin))}to{int(ymax)}_blendFlat3N3S3E3W_ff{fringe_flat_w}'
 
