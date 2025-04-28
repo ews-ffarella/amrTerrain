@@ -13,3 +13,6 @@ metMastHeight: [100]
 metMastLineSampling: True 
 molLength: -80.0
 
+initialUG: 6.99
+initialVG: 6.36
+

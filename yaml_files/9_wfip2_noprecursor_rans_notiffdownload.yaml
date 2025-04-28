@@ -14,8 +14,11 @@ metMastHeight: [100]
 roiLat: [45.53,45.73]
 roiLon: [-120.76,-120.56]
 metMastLineSampling: True 
-useTiff: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/5_terrain_noprecursor_rans_nodownload/wfip_xm25000to25000_ym25000to25000_blendFlat3N3S3E3W_ff2500.0.tif"
- 
+useTiff: "./tutorials/9_wfip2_noprecursor_rans_notiffdownload/wfip_xm25000to25000_ym25000to25000_blendFlat3N3S3E3W_ff2500.0.tif"
+
+initialUG: 7.57
+initialVG: 5.59
+
 
 
 

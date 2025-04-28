@@ -10,5 +10,9 @@ metMastLat: [44.164460]
 metMastLon: [-71.430089]
 metMastWind: [7.071,7.071]
 metMastHeight: [100]
-metMastLineSampling: True 
+metMastLineSampling: True
+
+initialUG: 7.12
+initialVG: 6.69
+
 
