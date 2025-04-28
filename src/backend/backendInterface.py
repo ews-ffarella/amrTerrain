@@ -2385,8 +2385,9 @@ class amrBackend():
         pl.show()
 
 
-from sys import argv 
-amrRef=amrBackend(argv[1])
-amrRef.createDomain()
-amrRef.createAMRFiles()
+if __name__ == "__main__":
+    from sys import argv 
+    amrRef=amrBackend(argv[1])
+    amrRef.createDomain()
+    amrRef.createAMRFiles()
 
