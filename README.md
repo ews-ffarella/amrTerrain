@@ -1,237 +1,192 @@
 # amrTerrain
-This python utility provides a workflow to create input files for immersed forcing terrain simulation in AMR-Wind. It can also be adopted for ERF in future. 
+This python utility provides a workflow to create input files for immersed forcing terrain simulation in AMR-Wind. 
 
-## DEM Files 
+## Code Execution 
 
-There are two methods available to input the DEM files within the python scripts:
+The code is executed by running python src/backend/backendinterface.py pathtoyamlfile
 
-### Elevation Package 
+The code can be run on most versions of python which has the required python libraries available. Currently, it has been tested on python3.9 and python3.12 though conda-force. 
 
-THis is done automatically within the code based on the user input. The size of the domain is restricted to 100 kms. 
+## YAML file 
 
-It is possible to use the he script stitchtif.py in src/backend to download multiple individual tiles. Once the tiles are downloaded, the tiles can be stitched using following commands: 
+Most of the variables used to generate the AMR-Wind input file has a default value and only minimal arguments are required if the user does not want to change the default input. A minimal yaml input file is given by 
 
-gdalbuildvrt terrain.vrt *.tif 
+caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/"
+caseFolder: "1_precursor_rans"
+centerLat: 36.38
+centerLon: -97.40
+farmRadius: 25000 
+metMastLatLon: True
+metMastNames: ["mast1"]
+metMastLat: [36.38]
+metMastLon: [-97.40]
+metMastWind: [7.071,7.071]
+metMastHeight: [100]
 
-gdalwarp -of GTiff  terrain.tif
+The default inputs run a no precursor simulation in RANS model for a neutral atmospheric boundary layer. 
 
+## Input Data 
 
-### User-provided Tiff File 
+There are two optional input data from the user: (i) Terrain data and (ii) Roughness data. 
 
-This option is useful for generating tiff files when the domain size is larger than 100kms. The tiff file can be generated from: https://portal.opentopography.org/raster?opentopoID=OTSRTM.082016.4326.1
+### Terrain Data
 
+The default method for including the terrain data taps the python-elevation package. This package downloads the SRTM data at 30 or 90 m resolution. The elevation method works when the domain radius is less then 90 kms. For larger domains, the user needs to specify a till file as follows: 
 
+useTiff: "........pathtofillfile.tif"
 
-### Sample Workflow 
+### Roughness Data 
 
-The input files are created by running python src/backend/backendinterface.py pathtoyamlfile 
+Currently there is only one option for supporting heterogenous roughness data. This involves downloading the netCDF file from: https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=overview 
 
-A sample yaml file is discussed below below. 
+This database provides a 300 m roughness data resolution. If you need a finer roughness data source, drop me an e-mail and specify the dataformat for input source. A method can be provided to include newer dataset. AMR-Wind requires input data for roughness in a specific format for efficient reading and a converter will be written inside to conver to this format. 
 
-#### Solver type: Currently only amr-wind. May include ERF in future. 
-solver: "amrWind"
+## Sample Workflow: 
 
-Currently only amrWind is supported. ERF support will be added in the future. 
+We will start with the minimal example 
 
-#### Directories
-caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI"
+caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/" -- Parent folder 
+caseFolder: "1_precursor_rans" -- Case folder 
+centerLat: 36.38 -- Center Latitude of the Farm 
+centerLon: -97.40 -- Center Longitude of the Farm 
+farmRadius: 25000  -- Farm Radius 
+metMastLatLon: True -- Input for met mast is in lat lon format 
+metMastNames: ["mast1"] -- Name of the names. Multiple values are written as follows: ["mast1","mast2","mast3",..]
+metMastLat: [36.38] -- Latitude for the met masts. Multiple values can be provided. 
+metMastLon: [-97.40] -- Longitude for the met masts. Multiple values can be provided. 
+metMastWind: [7.071,7.071] -- Reference wind (if used). The values are applied at the first mast in metMastNames. 
+metMastHeight: [100] -- The height of the met mast above terrain in m. 
 
-caseFolder: "wfip2_25km_rans_domain_noprecursor_flowturning"
+## Advanced Workflow 
 
-These variables provide the parent directory and name of case folder for writing the files. 
 
-#### 4 Case types: precursor, terrain, terrain_noprecursor and turbine 
-caseType: "terrain_noprecursor"
+### farmRadius 
 
-The recommended mode of execution is terrain_noprecursor. The other case types are added for backward compatibility with the initial immersed forcing developed and may be depcrecated in the future. 
+The domain in AMR-Wind is always rectangular. farmRadius sets the domain to be of equal size in both Horizontal direction (X and Y). If the aspect ratio of the farm is not close to 1, the user can specify separate inouts in each direction as follows (in m): 
 
-#### Placeholders 
-caseInitial: "amr"
+north: 25000 
+south: 25000 
+east: 25000 
+west: 25000 
 
-domainType: "center"
+The domain size is set to be 25 km in each direction from centerLat and centerLon. 
 
-These are currently placeholders and will be updated in the future. 
+### Fringe Zone 
 
-#### Center point around which to generate terrain 
-centerLat: 45.63374
+AMR-Wind does not use terrain conforming mesh. The mesh is instead smoothed to a flat surface at the horizontal boundaries. The input for the fringe zone requires two inputs: 
 
-centerLon: -120.66047
+northSlope: 3000 
+northFlat: 1000
 
-This is the center point of the domain around which the tiff files is extracted and the domain is created. 
+The first value is the distance over which the terrain smoothes to a flat surface from the existing terrain and the second value is a buffer region of the flat terrain. A similar value has to be specified for south, east and west directions. If no inputs are provided by the user, the fringe zone is set to me 10% with 5% for slope and 5% for flat. This number may be adjusted in future based on further testing. 
 
-#### Distances measured in meters from center lat to chop the tiff file 
-west: 12500
+The vertical height of the domain is decided based on the location of the maximum terrain height in the domain and is set to: maxTerrainHt + 2 * max(maxTerrainHt,2048).
 
-east: 12500
+### Mesh 
 
-south: 12500
+AMR-Wind is a Cartesian mesh code and no mesh generation is required. The marking of the immersed forcing region to represent the terrain is done during the solver initialization stage. There are two inputs to the meshing: 
 
-north: 12500
+cellSize: 96 
+verticalAR: 4 
 
-This is the span of the domain from the center latitutde and longitude. 
+The cellSize variable specifies the cell size in the horizontal direction (X and Y). verticalAR specifies the cell size in the vertical direction as cellSize/verticalAR. AMR - Wind can be run with aspect ratio of 4, 8 or 16. However, the change in the aspect ratio also increases the number of steps in the multi-grid solver at each step. It is recommended to keep the aspect ratio to 4 and include multi-level grid to refine the terrain. 
 
-#### Smoothing from terrain to flat surface in meters 
-westSlope: 2500
+### Turbulence Model 
 
-eastSlope: 2500
+turbulenceModel: "LES"/"RANS"
 
-northSlope: 2500 
+If no turbulence model is specified, an one-equation TKE model RANS model is employed (https://link.springer.com/article/10.1023/A:1011560202388). Changing the option to "LES" enables the use of the zero-equation non-linear sub-grid scale model of Kosovic (https://journals.ametsoc.org/view/journals/mwre/138/11/2010mwr3286.1.xml). There are other turbulence models which are available in AMR - Wind and they are not supported with terrain immersed forcing method. 
 
-southSlope: 2500 
+### 1-D RANS Solver 
 
-This is the distance within which the terrain is smooted to a flat surface. 
+This is specified by adding the following values in the yaml file: 
 
-#### Span for the flat surface in meters 
-westFlat: 2500
+rans1D: True 
 
-eastFlat: 2500
+The 1-D solver is optional for the LES model while it is run by default for the RANS model. The 1-D solver step runs the RANS model in single column mode and generates the vertical profile of wind speed, temperature and turbulence for initializating the simulations and using it as a boundary condition. The use of the RANS 1-D solver speeds up the solution significiantly and should be used. The solver requires the following inputs from the user: (i) reference wind speed, (ii) reference temperature, (iii) reference roughness and (iv) stability condition. 
 
-northFlat: 2500 
+The refinement wind speed is taken from: 
 
-southFlat: 2500
+metMastWind: [7.071,7.071] 
 
-This is the span of the flat surface which is used to create a fringe zone near inflow-outflow boundaries. 
+while the temperature input (in K), roughness length (in m) and stability conditions are specified as follows:  
 
+refTemperature: 300 
+refRoughness: 0.1 
+molLength: -1e30 
 
-#### Meshing 
-#### Horizontal cell size in meters 
-cellSize: 128
+When these values are not specified, the optional values shown above is used. 
 
-The cell size in the horizontal direction. 
+If a sweep angle is specified 
 
-#### Vertical cell size is cellSize/verticalAR 
-verticalAR: 4
+sweepAngle: 30 
 
-Aspect ratio to compute dz. AR of 1 increases computational cost and it is recommended to use 4. 
+the metMastWind speed magnitude is set to be  10 m/s. This will be discussed later. 
 
-#### Size to write the terrain file in m 
-terrainSize: 32
+It is optionally possible to limit the domain height used in the 1-D solver by including the variable (in m): 
 
-The size of the terrain when writing the terrain file to be read in AMR wind. It is recommended to use a terrainSize to be smaller than the finest horizontal grid size. 
+ransDomainTop: 4096 
 
-#### Turbulence Model: RANS/LES 
-turbulenceModel: "RANS"
+As the 1-D solver runs fast, it is not recommended to enable this option except for testing the inversion heights and other canonical ABL effects. 
 
-AMR-Wind has support for several LES and RANS models. However, only the non-linear LES model and the one-equation K model for RANS has terrain support. 
+### Terrain Preprocessing 
 
-#### Placeholder for initial wind if no met mast is specified 
-windX: 10.0
+By default, no user-input is required from the user for setting up the terrain in the solver. However, the following optional inputs can be included: 
 
-windY: 0.0 
+terrainSTL: True 
 
-windZ: 0.0 
+This writes out the terrain as a STL file for visuvalization. 
 
-This value will be overwritten with met-mast values. The input is required in the AMR-Wind file and it will be overwritten. 
+### Terrain Refinement 
 
-#### Physics values used for calculation 
-refTemperature: 300.0
+The common method in most commercial codes is to have an uniform mesh in the area of interest and to refine the mesh elsewhere. AMR - Wind does not have a general grid stretching option and uses levels to provide a refined mesh. The meshing starts with the following two inputs: 
 
-refRoughness: 0.1
+cellSize: 96 
+verticalAR: 4 
 
-refHeatflux: 0.0 
+This is referred as level0 mesh. Next mesh is refined at each entries in here: 
 
-RefTemperature is required for the Bouissnesq terms. Currently, only a single roughness can be specified for terrain. Will be replaced with non-uniform roughness in future. Heat flux is specified at the surface for accounting for the stratification effects. This will be modified by non uniform heat flux in future. 
+metMastNames: ["mast1","...."]
 
-#### Monin-Obukhov length required for RANS/LES simulations 
-molLength: 1e10
+The mesh refinement is applied in two parts: (i) cylindrical mesh around the mast and (ii) Adaptive mesh refinement (AMR) near the terrain. The cylindrical mesh around the mast is controlled with following inputs: 
 
-As an alterntive to specifying heat-flux, Monin Obukhov length can be specified. This is the commonly used method in commercial codes. When mollength is specified, refHeatflux is ignored. This method is still under development. 
+metMastRadius: 500 
+metMastRefinementLevel: 3 
 
-#### If case type is turbine all turbines within US included 
-turbineMarkType: "database"
-
-The turbineMarkType can be used with the caseType:"turbine" to automatically include all the turbines in the domain within continental united states. This feature may be depcrecated in future and replaced with a new option. 
-
-#### Writes a STL file of the terrain 
-writeTerrain: true
-
-Writes the terrain tiff file as a STL. 
-
-#### Runs the 1-D rans solver to create initialconditions 
-#### Mandatory for terrain_noprecursor to avoid solver divergence 
-rans1D: true
-
-It is recommended to run the 1-D solver for all cases. The solver creates a vertical profile generated from the single column RANS model. The output overwrites the uniform initial conditions in AMR-Wind. 
-
-
-#### Errors between met-mast wind and the 1-D solver computed 
-#### met-mast height winds 
-allowedError: 0.05
-
-The 1-D solver is run to convergence iteratively until the allowed wind speed error between the specified met-mast wind and the 1-D solver is less than the allowedError. 
-
-#### Write terrain aligned sampling to compute speed-up maps 
-writeTerrainSampling: true 
-
-verticalLevels: [10,80,100,200]
-
-Writes terrain-aligned speed-up maps at the specified vertical levels. The output needs to be postprocessed manually. A script may be added in future to do it. 
-
-#### Refinment Regions 
-refinementRegions: ["roi"]
-
-refinementMinX: [-3000]
-
-refinementMaxX: [3000]
-
-refinementMinY: [-3000]
-
-refinementMaxY: [3000]
-
-heightAboveTerrain: [200]
-
-refinementLevels: [1]
-
-Specifies multiple refinment regions based on the user requirements. Each refinement region automatically creates a terrain adaptive mesh refinement within the bounds.  
-
-#### Location of met-masts 
-metMastNames: ["mast1","mast2","mast3"]
-
-metMastLatLon: false 
-
-metMastX: [-500,0,500]
-
-metMastY: [0,0,0]
-
-metMastRadius: [500,500,500]
-
-metMastHeight: [100,100,100]
-
-metMastRefinementLevel: [3,3,3]
-
-metMastLineSampling: true 
-
-A cylindrical refinement region is created around each mast. The metMastHeight is automatically computed above the terrain level. The metMastLineSampling writes out postprocessing results for each met-mast. Each met-mast refinement automatically creates a terrain adaptive mesh refinement within the bounds. 
-
-#### Use one of the met-masts as driving wind 
-
-metMastWind: [12,2]
-
-metMastHeight: 100
-
-For a specified wind direction, use the metMast closest to the domain boundary to provide the reference wind. 
-
-
-#### AMR Refinement 
-
-refineTerrain: false
+The default refinement around each met mast creates 3 levels of refinement with a horizontal radius of 500 m. The vertical extents of the refinement runs from terrain to 100 m above the met mast and is currently fixed. AMR refinement near the terrain is also set to 3 levels of refinement. However, the user can override the AMR refinement level as follows: 
 
 refineLow: [-3000,-3000,300]
-
 refineHigh: [3000,3000,600]
+refineTerrainMaxLevel: 3 
 
-refineTerrainMaxLevel: 4
+This is useful when there is an area of steep terrain which is not near the regions of met mast. 
 
-This set of variables provides additional AMR refinement to terrain in addition to refinementRegions and MetMastRegions. This can be useful when the upstream region of certain masts have high curvature and we want to capture it. 
+In addition to the above two refinement levels, a box refinement can also be provided which requires the following inputs: 
 
-#### Guess Geostrophic Wind 
-initialUG: 17.1748 
+refinementMinX: [-500,,,,,,]
+refinementMaxX: [500,,,,,,]
+refinementMinY: [-500,,,,,,]
+refinementMaxY: [500,,,,,,]
+heightAboveTerrain: [200,...]
+refinementLevels: [3,...]
 
-initialVG: -4.10299
+This capability works only in the X-Y coordinate system. It has been deprecated in future releases and it is recommended that the user specify dummy met-masts to create refinement zones which are well aligned with AMR refinements. 
 
-The 1-D solver generates the wind speed profile by computing the geostrophic wind required to generate the wind speed value at the met mast height. The process runs multiple iterations of the 1-D solver. A closer guess speeds up the computation. This value is optional and does not have to be included. 
+### Postprocessing 
 
-#### Comment out the line below and change path to use user-specified tiff file 
-useTiff: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/output_SRTMGL1.tif"
+There are two different post-processing options: (i) line plots and (ii) terrain-aligned sampling. The line plots are generated at each met mast or virtual met mast locations by adding 
 
-The user-specified tif file should be used when the domain size is greater than 100 kms. 
+metMastLineSampling: True 
+
+The terrain-aligned sampling is useful for creating speed-up maps and is enabled as follows: 
+
+writeTerrainSampling: true 
+verticalLevels: [10,80,100,200]
+
+The distances in verticalLevels are measured from the terrain in m. A postprocessing script is included to convert the amrex format of output to vtk for plotting. 
+
+
+
+
+
+
