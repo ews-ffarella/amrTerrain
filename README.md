@@ -50,6 +50,15 @@ The default method for including the terrain data taps the python-elevation pack
 
 useTiff: "........pathtofillfile.tif"
 
+If not specified by `caseCRS`, the mesh will be created in UTM (WGS84) coordinate reference system.
+
+If the elevation data you have used does not come from SRTM, you can provide the `elevationProduct` meta data.
+
+The input elevation will be resampled to fir your domain. If you have used SRTM, the resolution will be
+either 30m or 90m. You can however customized this by passing the parameter `elevationResolution`.
+
+If you don't want the various terrain plots, you can disable them by setting `elevationShowPlots` to `false`.
+
 ### Roughness Data
 
 Currently there is only one option for supporting heterogenous roughness data. This involves downloading the netCDF file from: <https://cds.climate.copernicus.eu/datasets/satellite-land-cover?tab=overview>
