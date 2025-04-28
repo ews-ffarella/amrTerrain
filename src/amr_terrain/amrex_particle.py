@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """\
 AMReX Particle Data Processor
 -----------------------------
@@ -10,9 +8,11 @@ the sampling data written out by AMR-Wind using the native AMReX binary format.
 """
 
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import yaml
+
 
 class AmrexParticleFile:
     """AmrexParticleFile reader
@@ -28,13 +28,13 @@ class AmrexParticleFile:
             label (str): Label used for this set of probes
             root_dir (path): Path to the post_processing directory
         """
-        fpath = Path(root_dir) / ("%s%05d%s"%(label, time_index, suffix))
+        fpath = Path(root_dir) / ("%s%05d%s" % (label, time_index, suffix))
         print(fpath)
         return cls(fpath)
-    
+
     @classmethod
-    def special_load(cls,pathtofile):
-        fpath = Path(pathtofile,"particles")
+    def special_load(cls, pathtofile):
+        fpath = Path(pathtofile, "particles")
         print(fpath)
         return cls(fpath)
 
@@ -45,7 +45,7 @@ class AmrexParticleFile:
         """
         self.pdir = Path(pdir)
         if not self.pdir.exists():
-            raise ValueError(f'Path {self.pdir} does not exist.')
+            raise ValueError(f"Path {self.pdir} does not exist.")
 
     def __call__(self):
         """Parse the header and load all binary files
@@ -61,37 +61,34 @@ class AmrexParticleFile:
 
     def parse_header(self):
         """Parse the header and load metadata"""
-        with open(self.pdir / "Header", 'r') as fh:
+        with open(self.pdir / "Header") as fh:
             # Skip first line
             fh.readline()
             self.ndim = int(fh.readline().strip())
             self.num_reals = int(fh.readline().strip())
-            self.real_var_names = [fh.readline().strip() for _ in
-                                   range(self.num_reals)]
+            self.real_var_names = [fh.readline().strip() for _ in range(self.num_reals)]
             self.num_ints = int(fh.readline().strip())
-            self.int_var_names = [fh.readline().strip() for _ in
-                                  range(self.num_ints)]
+            self.int_var_names = [fh.readline().strip() for _ in range(self.num_ints)]
             # skip flag
             fh.readline()
             self.num_particles = int(fh.readline().strip())
             self.next_id = int(fh.readline().strip())
             self.finest_level = int(fh.readline().strip())
 
-            self.num_grids = np.empty((self.finest_level+1,), dtype=int)
+            self.num_grids = np.empty((self.finest_level + 1,), dtype=int)
             self.grid_info = []
-            for lev in range(self.finest_level+1):
+            for lev in range(self.finest_level + 1):
                 self.num_grids[lev] = int(fh.readline().strip())
 
-            for lev in range(self.finest_level+1):
+            for lev in range(self.finest_level + 1):
                 ginfo = []
                 for _ in range(self.num_grids[lev]):
-                    ginfo.append(
-                        [int(ix) for ix in fh.readline().strip().split()])
+                    ginfo.append([int(ix) for ix in fh.readline().strip().split()])
                 self.grid_info.append(ginfo)
 
     def parse_info(self):
         """Parse the sampling info file"""
-        with open(self.pdir.parent / "sampling_info.yaml", 'r') as fh:
+        with open(self.pdir.parent / "sampling_info.yaml") as fh:
             try:
                 self.info = yaml.safe_load(fh)
             except yaml.YAMLError as exc:
@@ -99,10 +96,8 @@ class AmrexParticleFile:
 
     def load_binary_data(self):
         """Read binary data into memory"""
-        self.real_data = np.empty((self.num_particles,
-                                   self.ndim+self.num_reals), dtype=float)
-        self.int_data = np.empty((self.num_particles,
-                                  self.num_ints), dtype=int)
+        self.real_data = np.empty((self.num_particles, self.ndim + self.num_reals), dtype=float)
+        self.int_data = np.empty((self.num_particles, self.num_ints), dtype=int)
 
         idata = self.int_data
         rdata = self.real_data
@@ -116,11 +111,11 @@ class AmrexParticleFile:
                 fname = self.bin_file_name(lev, idx)
                 fstr = str(fname)
                 if fstr not in bfiles:
-                    bfiles[fstr] = open(fname, 'rb')
+                    bfiles[fstr] = open(fname, "rb")
                 fh = bfiles[fstr]
                 fh.seek(offset)
-                ivals = np.fromfile(fh, dtype=np.int32, count=nints*npts)
-                rvals = np.fromfile(fh, dtype=float, count=nreals*npts)
+                ivals = np.fromfile(fh, dtype=np.int32, count=nints * npts)
+                rvals = np.fromfile(fh, dtype=float, count=nreals * npts)
 
                 for i, ii in enumerate(range(0, nints * npts, nints)):
                     pidx = ivals[ii + 2]
@@ -135,17 +130,16 @@ class AmrexParticleFile:
                 fh.close()
 
         idict = {key: idata[:, i] for i, key in enumerate(self.int_var_names)}
-        rvar_names = "xco yco zco".split() + self.real_var_names
+        rvar_names = ["xco", "yco", "zco"] + self.real_var_names
         rdict = {key: rdata[:, i] for i, key in enumerate(rvar_names)}
         idict.update(rdict)
-        self.df = pd.DataFrame(idict, index=idata[:,0])
+        self.df = pd.DataFrame(idict, index=idata[:, 0])
 
     def bin_file_name(self, lev, idx):
         """Return the name of the binary file"""
-        lvl_name = "Level_%d"%lev
-        fname = "DATA_%05d"%idx
-        return (self.pdir / lvl_name / fname)
+        lvl_name = "Level_%d" % lev
+        fname = "DATA_%05d" % idx
+        return self.pdir / lvl_name / fname
 
     def __repr__(self):
-        return "<%s: %s>"%(
-            self.__class__.__name__, self.pdir.stem)
+        return "<%s: %s>" % (self.__class__.__name__, self.pdir.stem)

@@ -34,7 +34,7 @@ solver: "amrWind"
 Currently only amrWind is supported. ERF support will be added in the future. 
 
 #### Directories
-caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI"
+caseParent: "./test_runs"
 
 caseFolder: "wfip2_25km_rans_domain_noprecursor_flowturning"
 

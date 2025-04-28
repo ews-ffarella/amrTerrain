@@ -1,0 +1,45 @@
+line-length = 120
+indent-width = 4
+respect-gitignore = true
+
+target-version = "py310"
+
+include = ["pyproject.toml", "src/amr_terrain/**/*.py"]
+extend-exclude = ["src/amr_terrain/example_scripts/saveTurbines.py"]
+
+[lint]
+
+
+ignore = ["E722", "F841"]
+select = ["C", "E", "F", "W"]
+
+extend-ignore = ["C901"]
+fixable = ["ALL"]
+unfixable = []
+
+mccabe.max-complexity = 17
+
+[lint.per-file-ignores]
+"SRTM_to_STL_example.py" = ["E501"]
+
+[lint.isort]
+# https://docs.astral.sh/ruff/formatter/#sorting-imports
+combine-as-imports = true
+known-first-party = []
+
+[lint.pydocstyle]
+convention = "numpy"
+
+
+[format]
+preview = false
+exclude = ["*.pyi"]
+
+
+line-ending = "lf"
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
