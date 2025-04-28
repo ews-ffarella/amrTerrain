@@ -223,12 +223,14 @@ class amrBackend:
             self.write_stl = self.yamlFile["writeTerrain"]
         except:
             self.write_stl = False
+
+        self.srtm_output = ""
         try:
+            self.terrainSTL = ""
             self.terrainSTL = self.yamlFile["terrainSTL"]
         except KeyError:
             import amr_terrain.SRTM_to_STL_example as converter
 
-            self.srtm_output = ""
             try:
                 self.usetiff = self.yamlFile["useTiff"]
             except:
@@ -286,6 +288,8 @@ class amrBackend:
                         dst_crs=self.caseCRS,
                     )
                 )
+                self.terrainSTL = ""
+                stlFile = Path(self.caseParent, self.caseName, "terrain.vtk")
             except Exception as e:
                 print("Cannot connect to internet to download file")
                 raise RuntimeError from e
@@ -295,7 +299,10 @@ class amrBackend:
             self.xref = 0
             self.yref = 0
             self.zRef = 0
-        stlFile = Path(self.caseParent, self.caseName, "terrain.vtk").as_posix()
+            stlFile = Path(self.terrainSTL).resolve()
+
+        assert stlFile.is_file(), f"STL file {stlFile!s} could not be found!"
+        stlFile = stlFile.as_posix()
 
         mesh = pv.read(stlFile)
         x1 = mesh.points[:, 0]

@@ -4,7 +4,7 @@ respect-gitignore = true
 
 target-version = "py310"
 
-include = ["pyproject.toml", "src/amr_terrain/**/*.py"]
+include = ["pyproject.toml", "src/amr_terrain/**/*.py", "notebooks/*.ipynb"]
 extend-exclude = ["src/amr_terrain/example_scripts/saveTurbines.py"]
 
 [lint]

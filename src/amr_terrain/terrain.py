@@ -13,6 +13,7 @@ For processing downloaded GeoTIFF data:
 - note: like the elevation package, this also depends on gdal
 """
 
+import gc
 import glob
 import os
 import sys
@@ -26,7 +27,7 @@ import utm
 import xarray as xr
 from rasterio import transform, warp
 from rasterio.crs import CRS
-from scipy.interpolate import RectBivariateSpline, griddata
+from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline, griddata
 
 # hard-coded here because ElementTree doesn't appear to have any
 # straightforward way to access the xmlns root attributes
@@ -156,8 +157,26 @@ class Terrain:
                 dst_crs=dst_crs,
                 resampling=resampling,
             )
+            dem_array = np.ma.masked_where(dem_array == src.nodata, dem_array)
+
+        dem_array = dem_array.filled(np.nan).astype("float")
+
         proj_x = orix + np.arange(0, Nx * dx, dx)
         proj_y = oriy + np.arange((-Ny + 1) * dy, dy, dy)
+
+        is_data_missing = np.isnan(dem_array)
+        n_missing = np.sum(is_data_missing)
+        if n_missing:
+            xsurf, ysurf = np.meshgrid(proj_x, proj_y, indexing="xy")
+            print(f"Filling {100.0 * n_missing / dem_array.size:.2f} % of the domain ...", flush=True)
+            interp = NearestNDInterpolator(
+                list(zip(xsurf[~is_data_missing].flatten(), ysurf[~is_data_missing].flatten())),
+                dem_array[~is_data_missing].flatten(),
+            )
+            dem_array = interp(np.column_stack([xsurf.flatten(), ysurf.flatten()])).reshape(dem_array.shape)
+            del xsurf, ysurf, is_data_missing, interp
+            gc.collect()
+
         self.x, self.y = np.meshgrid(proj_x, proj_y, indexing="ij")
         self.z = np.flipud(dem_array).T
 

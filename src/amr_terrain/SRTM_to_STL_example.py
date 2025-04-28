@@ -3,8 +3,11 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pyvista as pv
+import rasterio.features
+import rasterio.transform
 from matplotlib.patches import Rectangle
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline
+from shapely.geometry import box as sbox
 
 from amr_terrain.terrain import SRTM, Terrain
 
@@ -60,15 +63,7 @@ def SRTM_Converter(
     refloc = (refLat, refLon, refHeight)
     xmin, xmax = -left, right
     ymin, ymax = -bottom, top
-    fringe_flat_w = flat_west
-    fringe_flat_s = flat_south
-    fringe_flat_n = flat_north
-    fringe_flat_e = flat_east
     shiftFlatToZero = True
-    fringe_w = slope_west
-    fringe_s = slope_south
-    fringe_n = slope_north
-    fringe_e = slope_east
     tiffile = use_tiff
 
     latlon_bounds = (
@@ -86,7 +81,7 @@ def SRTM_Converter(
         assert ds is not None, ds
         assert ds > 0, ds
 
-    case = f"wfip_xm{abs(int(xmin))}to{int(xmax)}_ym{abs(int(ymin))}to{int(ymax)}_blendFlat3N3S3E3W_ff{fringe_flat_w}"
+    case = f"wfip_xm{abs(int(xmin))}to{int(xmax)}_ym{abs(int(ymin))}to{int(ymax)}_blendFlat3N3S3E3W_ff{flat_west}"
 
     # this will be downloaded:
     # srtm_output=f'{outdir}/{case}.tif' # need absolute path for GDAL
@@ -107,10 +102,10 @@ def SRTM_Converter(
 
     x1 = np.arange(xmin, xmax, ds)
     y1 = np.arange(ymin, ymax, ds)
-    xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
+
     x, y, z = srtm.to_terrain(dx=ds)
+
     xref, yref = srtm.to_xy(*refloc[:2])
-    vmin, vmax = 1500, 2500
     if refloc[0] < 0:
         yref = yref - 10000000
 
@@ -141,14 +136,13 @@ def SRTM_Converter(
         ax.add_patch(les)
 
     # ### 3.1 Downscale to output grid
-
     interpfun = RectBivariateSpline(x[:, 0] - xref, y[0, :] - yref, z)
-
-    # resampled SRTM data stored in 'zsrtm'
     zsrtm = interpfun(x1, y1, grid=True)
+    del interpfun, z
 
     if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
+        xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
         cm = ax.pcolormesh(xsurf, ysurf, zsrtm, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
         cb = fig.colorbar(cm, ax=ax)
         cb.set_label("elevation [m]", fontsize="x-large")
@@ -157,40 +151,98 @@ def SRTM_Converter(
         ax.set_ylabel("northing [m]")
         ax.set_title(f"{product} terrain height")
         ax.axis("scaled")
-
         fig.savefig(f"{outdir}/elevation_{product.lower()}_{case}.png", dpi=150, bbox_inches="tight")
 
-    # ## 4. Get the low-resolution terrain from the mesoscale
-    # This part is only relevant if the user chose to blen the high-resolution SRTM terrain data with WRF
+    xsurf, ysurf = np.meshgrid(x1, y1, indexing="xy")
+    zsrtm = np.flipud(zsrtm.T)
+    transform = rasterio.transform.from_bounds(xmin, ymin, xmax, ymax, x1.size, y1.size)
+    assert transform.a == -transform.e == ds
+    domain_area = sbox(
+        xmin + (flat_west + slope_west),
+        ymin + (flat_south + slope_south),
+        xmax - (flat_east + slope_east),
+        ymax - (flat_north + slope_north),
+    )
+    im = (
+        rasterio.features.rasterize(
+            [(domain_area, 1)], out_shape=zsrtm.shape, fill=0, transform=transform, all_touched=True
+        )
+        == 1
+    )
+    # print(100.0 * np.sum(im) / im.size, flush=True)
+
+    interp = NearestNDInterpolator(
+        list(zip(xsurf[im == 1].flatten(), ysurf[im == 1].flatten())),
+        zsrtm[im == 1].flatten(),
+    )
+    zsrtm = interp(np.column_stack([xsurf.flatten(), ysurf.flatten()])).reshape(zsrtm.shape)
+
+    if write_stl and do_plot:
+        fig, ax = plt.subplots(figsize=(12, 8))
+        cm = ax.pcolormesh(xsurf, ysurf, np.flipud(zsrtm), cmap="terrain")  # ,vmin=vmin,vmax=vmax)
+        # cm = ax.imshow(zsrtm, cmap="terrain", extent=(xmin, xmax, ymin, ymax))  # ,vmin=vmin,vmax=vmax)
+        cb = fig.colorbar(cm, ax=ax)
+        cb.set_label("elevation [m]", fontsize="x-large")
+        ax.tick_params(labelsize="large")
+        ax.set_xlabel("easting [m]")
+        ax.set_ylabel("northing [m]")
+        ax.set_title(f"{product} terrain height (blanked)")
+        ax.axis("scaled")
+        fig.savefig(f"{outdir}/elevation_{product.lower()}_blanked_{case}.png", dpi=150, bbox_inches="tight")
 
     # ## 5. Blend surface definitions
 
     # check distance from west boundary
     blend_w = np.ones(xsurf.shape)
-    if fringe_w > 0:
-        blend_w = np.minimum(np.maximum((xsurf - xmin - fringe_flat_w - fringe_w) / fringe_w, 0), 1)
+    if slope_west > 0:
+        blend_w = np.maximum(
+            np.minimum((xsurf - (xmin + flat_west)) / slope_west, 1),
+            0,
+        )
 
     # check distance from east boundary
     blend_e = np.ones(xsurf.shape)
-    if fringe_e > 0:
-        blend_e = np.minimum(np.maximum((xmax - xsurf - fringe_flat_e - fringe_w) / fringe_e, 0), 1)
+    if slope_east > 0:
+        blend_e = np.maximum(
+            np.minimum((xmax - flat_east - xsurf) / slope_east, 1),
+            0,
+        )
 
     # check distance from south boundary
     blend_s = np.ones(xsurf.shape)
-    if fringe_s > 0:
-        blend_s = np.minimum(np.maximum((ysurf - ymin - fringe_flat_s - fringe_s) / fringe_s, 0), 1)
+    if slope_south > 0:
+        blend_s = (
+            np.maximum(
+                np.minimum(
+                    (ysurf - (ymin + flat_south)) / slope_south,
+                    1,
+                ),
+                0,
+            )
+            .T[:, ::-1]
+            .T
+        )
 
     # check distance from north boundary
     blend_n = np.ones(xsurf.shape)
-    if fringe_n > 0:
-        blend_n = np.minimum(np.maximum((ymax - ysurf - fringe_flat_n - fringe_n) / fringe_n, 0), 1)
+    if slope_north > 0:
+        blend_n = (
+            np.maximum(
+                np.minimum(
+                    ((ymax - flat_north) - ysurf) / slope_north,
+                    1,
+                ),
+                0,
+            )
+            .T[:, ::-1]
+            .T
+        )
 
     # combine blending functions
     blend = blend_w * blend_e * blend_s * blend_n
-
     if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
-        cm = ax.pcolormesh(xsurf, ysurf, blend, cmap="magma")
+        cm = ax.pcolormesh(xsurf, ysurf, np.flipud(blend), cmap="magma")
         cb = fig.colorbar(cm, ax=ax)
         ax.tick_params(labelsize="large")
         ax.set_xlabel("easting [m]")
@@ -211,7 +263,7 @@ def SRTM_Converter(
 
     if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
-        cm = ax.pcolormesh(xsurf, ysurf, zblend, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
+        cm = ax.pcolormesh(xsurf, ysurf, np.flipud(zblend), cmap="terrain")  # ,vmin=vmin,vmax=vmax)
         cb = fig.colorbar(cm, ax=ax)
         cb.set_label("elevation [m]", fontsize="x-large")
         ax.tick_params(labelsize="large")
@@ -232,7 +284,7 @@ def SRTM_Converter(
     if shiftFlatToZero:
         if write_stl and do_plot:
             fig, ax = plt.subplots(figsize=(12, 8))
-            cm = ax.pcolormesh(xsurf, ysurf, zblend, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
+            cm = ax.pcolormesh(xsurf, ysurf, np.flipud(zblend), cmap="terrain")  # ,vmin=vmin,vmax=vmax)
             cb = fig.colorbar(cm, ax=ax)
             cb.set_label("elevation [m]", fontsize="x-large")
             ax.tick_params(labelsize="large")
@@ -243,6 +295,9 @@ def SRTM_Converter(
             fig.savefig(f"{outdir}/elevation_blended_{case}.png", dpi=150, bbox_inches="tight")
 
     # ## 6. Write out terrain surface STL
+    xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
+    zblend = np.flipud(zblend)
+
     x1 = xsurf.flatten(order="F")
     y1 = ysurf.flatten(order="F")
     z1 = zblend.flatten(order="F")

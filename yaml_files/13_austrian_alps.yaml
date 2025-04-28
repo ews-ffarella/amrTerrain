@@ -5,8 +5,8 @@ caseCRS : "EPSG:3416"
 
 elevationProduct: "DTM_Austria"
 elevationShowPlots: true
-elevationResolution: 10.0
-writeTerrain: true
+elevationResolution: 200.0
+writeTerrain: true # We want to write the terrain STL (see 13b_austrian_alps_stl)
 useTiff: "./yaml_files/elevation_dtm_austria.tif"
 
 # Domain area
@@ -16,20 +16,34 @@ centerLon: 15.009219
 cellSize: 200
 verticalAR: 5
 
-west: 16353.511
-south: 16346.708
-east: 15646.489
-north: 18853.292
+west: 31553.622
+south: 28946.774
+east: 29246.378
+north: 30253.226
 # Slope area
-westSlope: 3400.0
-southSlope: 4000.0
-eastSlope: 2800.0
-northSlope: 6600.0
+westSlope: 8600.0
+southSlope: 6200.0
+eastSlope: 6400.0
+northSlope: 7600.0
 # Flat area
 westFlat: 2700.0
 eastFlat: 2700.0
-southFlat: 2000.0
-northFlat: 2000.0
+southFlat: 2400.0
+northFlat: 2400.0
+
+# # Debug
+# west: 30_000
+# south: 30_000
+# east: 30_000
+# north: 30_000
+# westSlope: 2000.0
+# westFlat: 10000.0
+# eastSlope: 7000.0
+# eastFlat: 3000.0
+# southSlope: 5000.0
+# southFlat: 8000.0
+# northSlope: 2500.0
+# northFlat: 2500.0
 
 initialUG: 9.82  
 initialVG: -0.29
