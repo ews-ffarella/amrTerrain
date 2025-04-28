@@ -64,7 +64,8 @@ def get_utm_crs(latitude: float, longitude: float, datum="WGS84", ellps="WGS84")
         + f"+datum={datum:s} +units=m +no_defs "
         + f"+ellps={ellps:s} +towgs84=0,0,0"
     )
-    return zone_number, CRS.from_proj4(proj)
+    crs = CRS.from_epsg(CRS.from_proj4(proj).to_epsg())
+    return zone_number, crs
 
 
 class Terrain:
@@ -85,7 +86,9 @@ class Terrain:
         self.latlon_bounds = list(latlon_bounds)
 
         if dst_crs is None:
-            self.zone_number, self.dst_crs = get_utm_crs(self.latlon_bounds[0])
+            lon = (self.latlon_bounds[0] + self.latlon_bounds[2]) / 2
+            lat = (self.latlon_bounds[1] + self.latlon_bounds[3]) / 2
+            self.zone_number, self.dst_crs = get_utm_crs(lat, lon)
         else:
             dst_crs = rasterio.crs.CRS.from_user_input(dst_crs)
             crs_name = dst_crs.to_wkt().split('"')[1]

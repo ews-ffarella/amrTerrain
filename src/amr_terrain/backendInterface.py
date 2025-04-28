@@ -56,6 +56,9 @@ class amrBackend:
             _, crs = get_utm_crs(self.caseCenterLat, self.caseCenterLon)
         self.caseCRS = crs
 
+        crs_name = self.caseCRS.to_wkt().split('"')[1]
+        print(f"The domain will be created using the projection {crs_name!r}")
+
         # Method 1 - Assuming a circular farm but amr-wind uses rectangular grid so using inscribed circle
         try:
             farmRadius = self.yamlFile["farmRadius"]
@@ -223,71 +226,69 @@ class amrBackend:
         try:
             self.terrainSTL = self.yamlFile["terrainSTL"]
         except KeyError:
-            self.terrainSTL = ""
+            import amr_terrain.SRTM_to_STL_example as converter
 
-        if not self.terrainSTL:
+            self.srtm_output = ""
             try:
-                import amr_terrain.SRTM_to_STL_example as converter
-
-                self.srtm_output = ""
-                try:
-                    self.usetiff = self.yamlFile["useTiff"]
-                except:
-                    self.usetiff = " "
-                    westlon = -0.5
-                    eastlon = 0.5
-                    southlat = -0.5
-                    northlat = 0.5
-                else:
-                    with rasterio.open(self.usetiff) as src:
-                        bounds = src.bounds
-                        if src.crs != Terrain.latlon_crs:
-                            transform, width, height = rasterio.warp.calculate_default_transform(
-                                src.crs,
-                                Terrain.latlon_crs,
-                                src.width,
-                                src.height,
-                                *src.bounds,
-                            )
-                            bounds = rasterio.transform.array_bounds(height, width, transform)
-
-                        westlon = bounds[0] - self.caseCenterLon
-                        eastlon = bounds[2] - self.caseCenterLon
-                        southlat = bounds[1] - self.caseCenterLat
-                        northlat = bounds[3] - self.caseCenterLat
-
-                    self.xref, self.yref, self.zRef, self.srtm, self.zone_number, self.srtm_output = (
-                        converter.SRTM_Converter(
-                            Path(self.caseParent, self.caseName).as_posix(),
-                            self.caseCenterLat,
-                            self.caseCenterLon,
-                            self.refHeight,
-                            self.caseWest,
-                            self.caseEast,
-                            self.caseSouth,
-                            self.caseNorth,
-                            self.caseWestSlope,
-                            self.caseEastSlope,
-                            self.caseSouthSlope,
-                            self.caseNorthSlope,
-                            self.caseWestFlat,
-                            self.caseEastFlat,
-                            self.caseSouthFlat,
-                            self.caseNorthFlat,
-                            self.usetiff,
-                            self.write_stl,
-                            westlon,
-                            eastlon,
-                            southlat,
-                            northlat,
-                            product=self.yamlFile.get("elevationProduct", "SRTM1"),
-                            do_plot=bool(self.yamlFile.get("elevationShowPlots", True)),
-                            ds=float(self.yamlFile.get("elevationResolution", 10.0)),
-                            dst_crs=self.caseCRS,
-                        )
-                    )
+                self.usetiff = self.yamlFile["useTiff"]
             except:
+                self.usetiff = " "
+                westlon = -0.5
+                eastlon = 0.5
+                southlat = -0.5
+                northlat = 0.5
+            else:
+                with rasterio.open(self.usetiff) as src:
+                    bounds = src.bounds
+                    if src.crs != Terrain.latlon_crs:
+                        transform, width, height = rasterio.warp.calculate_default_transform(
+                            src.crs,
+                            Terrain.latlon_crs,
+                            src.width,
+                            src.height,
+                            *src.bounds,
+                        )
+                        bounds = rasterio.transform.array_bounds(height, width, transform)
+
+                    westlon = bounds[0] - self.caseCenterLon
+                    eastlon = bounds[2] - self.caseCenterLon
+                    southlat = bounds[1] - self.caseCenterLat
+                    northlat = bounds[3] - self.caseCenterLat
+
+            try:
+                self.xref, self.yref, self.zRef, self.srtm, self.zone_number, self.srtm_output = (
+                    converter.SRTM_Converter(
+                        Path(self.caseParent, self.caseName).as_posix(),
+                        self.caseCenterLat,
+                        self.caseCenterLon,
+                        self.refHeight,
+                        self.caseWest,
+                        self.caseEast,
+                        self.caseSouth,
+                        self.caseNorth,
+                        self.caseWestSlope,
+                        self.caseEastSlope,
+                        self.caseSouthSlope,
+                        self.caseNorthSlope,
+                        self.caseWestFlat,
+                        self.caseEastFlat,
+                        self.caseSouthFlat,
+                        self.caseNorthFlat,
+                        self.usetiff,
+                        self.write_stl,
+                        westlon,
+                        eastlon,
+                        southlat,
+                        northlat,
+                        product=self.yamlFile.get("elevationProduct", "SRTM1"),
+                        do_plot=bool(self.yamlFile.get("elevationShowPlots", True)),
+                        ds=float(self.yamlFile.get("elevationResolution", 10.0)),
+                        dst_crs=self.caseCRS,
+                    )
+                )
+            except Exception as e:
                 print("Cannot connect to internet to download file")
+                raise RuntimeError from e
                 exit(-1)
         else:
             warnings.warn("Turbine or Met Mast Locations should be in STL coordinates. Not Lat/Lon")
