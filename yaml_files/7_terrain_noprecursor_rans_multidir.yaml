@@ -1,6 +1,6 @@
 # Setup for performing terrain RANS simulations in AMR-Wind without precursor and for multiple directions 
 # This is the minimum setup required 
-caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/"
+caseParent: "./test_runs"
 caseFolder: "7_terrain_noprecursor_rans_multidir"
 centerLat: 36.38
 centerLon: -97.40

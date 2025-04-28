@@ -1,5 +1,5 @@
 # RANS simulation of the White Mountains, New Hampshire, USA
-caseParent: "/Users/hgopalan/Documents/P101_AMR-Wind/Data/tempGUI/tutorials/"
+caseParent: "./test_runs"
 caseFolder: "10_whitemountains_noprecursor_rans_neutral"
 centerLat: 44.164460
 centerLon: -71.430089
