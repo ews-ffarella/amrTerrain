@@ -5,7 +5,7 @@ caseCRS : "EPSG:3416"
 
 elevationProduct: "DTM_Austria"
 elevationShowPlots: true
-elevationResolution: 200.0
+elevationResolution: 15.0
 writeTerrain: true # We want to write the terrain STL (see 13b_austrian_alps_stl)
 useTiff: "./yaml_files/elevation_dtm_austria.tif"
 

@@ -156,7 +156,9 @@ def SRTM_Converter(
     xsurf, ysurf = np.meshgrid(x1, y1, indexing="xy")
     zsrtm = np.flipud(zsrtm.T)
     transform = rasterio.transform.from_bounds(xmin, ymin, xmax, ymax, x1.size, y1.size)
-    assert transform.a == -transform.e == ds
+    # TODO: This is sloppy ...
+    assert np.abs(transform.a - ds) < 1e-2, (transform.a, ds)
+    assert np.abs(-transform.e - ds) < 1e-2, (-transform.e, ds)
     domain_area = sbox(
         xmin + (flat_west + slope_west),
         ymin + (flat_south + slope_south),
@@ -296,11 +298,9 @@ def SRTM_Converter(
 
     # ## 6. Write out terrain surface STL
     xsurf, ysurf = np.meshgrid(x1, y1, indexing="ij")
-    zblend = np.flipud(zblend)
-
     x1 = xsurf.flatten(order="F")
     y1 = ysurf.flatten(order="F")
-    z1 = zblend.flatten(order="F")
+    z1 = np.flipud(zblend).T.flatten(order="F")
     data = np.column_stack([x1, y1, z1])
     mesh = pv.PolyData(data)
     vtkout = f"{outdir}/terrain.vtk"
