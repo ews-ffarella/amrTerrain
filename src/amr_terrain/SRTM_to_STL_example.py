@@ -7,6 +7,7 @@ import rasterio.features
 import rasterio.transform
 from matplotlib.patches import Rectangle
 from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline
+from scipy.ndimage import gaussian_filter
 from shapely.geometry import box as sbox
 
 from amr_terrain.terrain import SRTM, Terrain
@@ -112,7 +113,7 @@ def SRTM_Converter(
     if np.amin(z) < 0:
         z[z < 0] = 0
 
-    if write_stl:
+    if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(x - xref, y - yref, z, cmap="terrain")  # ,vmin=vmin,vmax=vmax)
         cb = fig.colorbar(cm, ax=ax)
@@ -237,6 +238,12 @@ def SRTM_Converter(
 
     # combine blending functions
     blend = blend_w * blend_e * blend_s * blend_n
+
+    resolution = max(transform.a, -transform.e)
+    radius = int(500 / resolution / 2)
+
+    blend = gaussian_filter(blend, sigma=3, radius=[radius, radius], mode="nearest")
+
     if write_stl and do_plot:
         fig, ax = plt.subplots(figsize=(12, 8))
         cm = ax.pcolormesh(xsurf, ysurf, np.flipud(blend), cmap="magma")
