@@ -16,7 +16,7 @@ import rasterio.crs
 import rasterio.warp
 import utm
 import yaml
-from scipy.interpolate import NearestNDInterpolator
+from scipy.interpolate import NearestNDInterpolator, RectBivariateSpline
 
 from amr_terrain.amr1DSolver import amr1dSolver
 from amr_terrain.terrain import Terrain, check_crs, get_utm_crs
@@ -560,8 +560,17 @@ class amrBackend:
             self.terrainZMax = ranges[idx]
         else:
             self.terrainZMax = ranges[idx + 1]
-        self.ABLHeight = max(self.terrainZMax, 2048)
+
         self.RDLHeight = max(self.terrainZMax, 2048)
+        self.ABLHeight = max(self.terrainZMax, 2048)
+        try:
+            # FIXME: This does not match with 1D solver
+            #  zheight = self.terrainZMax + self.ABLHeight
+            ABLHeight = self.yamlFile["ransDomainTop"] - self.terrainZMax
+            self.ABLHeight = max(ABLHeight, 2048)
+        except:
+            pass
+
         self.maxZ = self.terrainZMax + self.ABLHeight + self.RDLHeight
 
         if target:
