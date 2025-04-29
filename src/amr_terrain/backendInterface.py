@@ -484,18 +484,18 @@ class amrBackend:
         # self.metMastRefinement(self.amrTerrainFile)
         # self.metMastMonitoring(self.amrTerrainFile)
 
-    def createElevationInterpolator(self, as_cfd=False):
+    def createElevationInterpolator(self, as_mesh=False):
         xs = np.sort(np.unique(self.terrainX1.tolist()))
         ys = np.sort(np.unique(self.terrainX2.tolist()))
 
-        if not as_cfd:
+        if not as_mesh:
             xs += self.xref
             ys += self.yref
 
-        dx = np.unique(np.diff(xs).round(2))
+        dx = np.unique(np.diff(xs).round(6))
         assert dx.size == 1
         dx = dx[0]
-        dy = np.unique(np.diff(ys).round(2))
+        dy = np.unique(np.diff(ys).round(6))
         assert dy.size == 1
         dy = dy[0]
 
@@ -507,17 +507,43 @@ class amrBackend:
             xs.size,
             ys.size,
         )
-        assert transform.a == dx
-        assert -transform.e == dy
 
-        from scipy.interpolate import RectBivariateSpline
+        tolerance = 0.01 / 100.0
+        assert np.abs(transform.a - dx) / dx < tolerance, (transform.a, dx)
+        assert np.abs(-transform.e - dy) / dy < tolerance, (-transform.e, dy)
 
         elev = np.asarray(self.terrainX3.reshape(ys.size, xs.size))
-        if not as_cfd:
+        if not as_mesh:
             elev += float(self.zRef)
 
         zfun = RectBivariateSpline(xs, ys, elev.T)
         return xs, ys, elev, zfun, transform
+
+    def exportTerrainToVTI(self, write: bool = True, as_mesh: bool = False):
+        xs, ys, elev, *_ = self.createElevationInterpolator(as_mesh=as_mesh)
+        grid = pv.ImageData(
+            dimensions=(xs.size + 1, ys.size + 1, 1),
+            spacing=(xs[1] - xs[0], ys[1] - ys[0], 0),
+            origin=(xs[0], ys[0], 0),
+        )
+        grid.cell_data.set_array(elev.T.flatten("F"), "Elevation")
+        if write:
+            filename = Path(self.caseDir).joinpath("terrain.vti").resolve()
+            print(f"Saving terrain as {filename!s}")
+            grid.save(filename, binary=True)
+        return grid
+
+    def exportTerrainToVTS(self, write: bool = True, as_mesh: bool = False):
+        grid = self.exportTerrainToVTI(write=False, as_mesh=as_mesh)
+        grid = grid.cell_data_to_point_data()
+        grid = grid.warp_by_scalar("Elevation")
+        grid.clear_point_data()
+        grid.clear_cell_data()
+        if write:
+            filename = Path(self.caseDir).joinpath("terrain.vts").resolve()
+            print(f"Saving terrain as {filename!s}")
+            grid.save(filename, binary=True)
+        return grid
 
     def createAMRGeometry(self, target, periodic=-1):
         if target:
