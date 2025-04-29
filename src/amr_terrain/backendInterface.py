@@ -2025,7 +2025,7 @@ class amrBackend:
         target.write("\n")
         if writeTerrainSampling:
             for levels in offsets:
-                target.write("%-50s = velocity temperature \n" % ("terrain" + str(levels) + ".fields"))
+                target.write("%-50s = velocity temperature tke \n" % ("terrain" + str(levels) + ".fields"))
                 target.write('%-50s = "native"\n' % ("terrain" + str(levels) + ".output_format"))
                 target.write("%-50s = 100\n" % ("terrain" + str(levels) + ".output_frequency"))
                 target.write("%-50s = %s \n" % ("terrain" + str(levels) + ".labels", "terrain" + str(levels)))
@@ -2042,7 +2042,7 @@ class amrBackend:
                 except:
                     pass
                 else:
-                    target.write("%-50s = velocity temperature \n" % ("roi" + str(levels) + ".fields"))
+                    target.write("%-50s = velocity temperature tke \n" % ("roi" + str(levels) + ".fields"))
                     target.write('%-50s = "native"\n' % ("roi" + str(levels) + ".output_format"))
                     target.write("%-50s = 100\n" % ("roi" + str(levels) + ".output_frequency"))
                     target.write("%-50s = %s \n" % ("roi" + str(levels) + ".labels", "roi" + str(levels)))
@@ -2056,7 +2056,7 @@ class amrBackend:
                     target.write("%-50s = %g \n" % (samplingentity, levels))
         if metMastLineSampling and len(metMastRegions) > 0:
             for i in range(0, len(metMastRegions)):
-                target.write("%-50s = velocity temperature \n" % (str(metMastRegions[i]) + ".fields"))
+                target.write("%-50s = velocity temperature tke\n" % (str(metMastRegions[i]) + ".fields"))
                 target.write('%-50s = "native"\n' % (str(metMastRegions[i]) + ".output_format"))
                 target.write("%-50s = 60\n" % (str(metMastRegions[i]) + ".output_frequency"))
                 target.write("%-50s = %s \n" % (str(metMastRegions[i]) + ".labels", str(metMastRegions[i])))
