@@ -146,7 +146,7 @@ class amrBackend:
             self.refRoughness = 0.1
         # When we are sweeping roughness changes
         try:
-            wind = self.yamlFile["metMastWind"]
+            wind = self.yamlFile["metMastWind"].copy()
             self.metMastHeight = self.yamlFile["metMastHeight"]
             self.metMastWind = [wind[0], wind[1]]
             # print(self.metMastHeight)
@@ -1651,34 +1651,105 @@ class amrBackend:
             metMastRegions = self.yamlFile["metMastNames"]
         except:
             metMastRegions = []
+
+        # TODO: All these varaibales should be parsed once and for all
+        # in a separate inititlizer method
+        # The whole procedure is very error-prone
+
+        metMastX = []
+        metMastY = []
+        if len(metMastRegions) > 0:
+            refinedIndices = []
+            try:
+                metMastRadius = self.yamlFile["metMastRadius"]
+            except:
+                metMastRadius = []
+                metMastRadius.append(500.0)
+                for i in range(1, len(metMastRegions)):
+                    metMastRadius.append(500.0)
+            try:
+                metMastRefinementLevel = self.yamlFile["metMastRefinementLevel"]
+            except:
+                metMastRefinementLevel = []
+                metMastRefinementLevel.append(3)
+                for i in range(1, len(metMastRegions)):
+                    metMastRefinementLevel.append(3)
+            try:
+                metMastHeight = self.yamlFile["metMastHeight"]
+            except:
+                metMastHeight = 200
+
+            try:
+                metMastLatLon = self.yamlFile["metMastLatLon"]
+            except:
+                metMastLatLon = False
+            if not metMastLatLon:
+                try:
+                    self.metMastX = self.yamlFile["metMastX"].copy()
+                except:
+                    warnings.warn("Missing X values. No refinements written")
+                    return
+                try:
+                    self.metMastY = self.yamlFile["metMastY"].copy()
+                except:
+                    warnings.warn("Missing Y values. No refinements written")
+                    return
+            else:
+                try:
+                    metMastLon = self.yamlFile["metMastLon"].copy()
+                except:
+                    warnings.warn("Missing Longitude values. No refinements written")
+                    return
+                try:
+                    metMastLat = self.yamlFile["metMastLat"].copy()
+                    # print(metMastLat)
+                except:
+                    warnings.warn("Missing Latitude values. No refinements written")
+                    return
+
+                self.metMastX = metMastLat
+                self.metMastY = metMastLon
+                print((metMastLat, metMastLon))
+                for i in range(0, len(metMastRegions)):
+                    self.metMastX[i], self.metMastY[i] = self.srtm.to_xy(metMastLat[i], metMastLon[i])
+                    self.metMastX[i] = self.metMastX[i] - self.xref
+                    self.metMastY[i] = self.metMastY[i] - self.yref
+
+            refinedIndices = [i for i, lvl in enumerate(metMastRefinementLevel) if lvl > 0]
+
+            metMastRegions = [_ for i, _ in enumerate(metMastRegions) if i in refinedIndices]
+            metMastRefinementLevel = [_ for i, _ in enumerate(metMastRefinementLevel) if i in refinedIndices]
+            metMastX = [_ for i, _ in enumerate(self.metMastX) if i in refinedIndices]
+            metMastY = [_ for i, _ in enumerate(self.metMastY) if i in refinedIndices]
+
         if len(refinementRegions) > 0:
             try:
-                refinementMinx = self.yamlFile["refinementMinX"]
+                refinementMinx = self.yamlFile["refinementMinX"].copy()
             except:
                 warnings.warn("Missing minimum X values. No refinements written")
                 return
             try:
-                refinementMaxx = self.yamlFile["refinementMaxX"]
+                refinementMaxx = self.yamlFile["refinementMaxX"].copy()
             except:
                 warnings.warn("Missing maximum X values. No refinements written")
                 return
             try:
-                refinementMiny = self.yamlFile["refinementMinY"]
+                refinementMiny = self.yamlFile["refinementMinY"].copy()
             except:
                 warnings.warn("Missing minimum Y values. No refinements written")
                 return
             try:
-                refinementMaxy = self.yamlFile["refinementMaxY"]
+                refinementMaxy = self.yamlFile["refinementMaxY"].copy()
             except:
                 warnings.warn("Missing maximum Y values. No refinements written")
                 return
             try:
-                refinementMaxz = self.yamlFile["heightAboveTerrain"]
+                refinementMaxz = self.yamlFile["heightAboveTerrain"].copy()
             except:
                 warnings.warn("Missing maximum Z values. No refinements written")
                 return
             try:
-                refinementLevels = self.yamlFile["refinementLevels"]
+                refinementLevels = self.yamlFile["refinementLevels"].copy()
             except:
                 warnings.warn("No refinement levels specified")
                 return
@@ -1837,64 +1908,10 @@ class amrBackend:
         if len(metMastRegions) == 0:
             pass
         else:
-            try:
-                metMastLatLon = self.yamlFile["metMastLatLon"]
-            except:
-                metMastLatLon = False
-            if not metMastLatLon:
-                try:
-                    self.metMastX = self.yamlFile["self.metMastX"]
-                except:
-                    warnings.warn("Missing X values. No refinements written")
-                    return
-                try:
-                    self.metMastY = self.yamlFile["self.metMastY"]
-                except:
-                    warnings.warn("Missing Y values. No refinements written")
-                    return
-            else:
-                try:
-                    metMastLon = self.yamlFile["metMastLon"]
-                except:
-                    warnings.warn("Missing Longitude values. No refinements written")
-                    return
-                try:
-                    metMastLat = self.yamlFile["metMastLat"]
-                    # print(metMastLat)
-                except:
-                    warnings.warn("Missing Latitude values. No refinements written")
-                    return
-                self.metMastX = metMastLat
-                self.metMastY = metMastLon
-                for i in range(0, len(metMastRegions)):
-                    self.metMastX[i], self.metMastY[i] = self.srtm.to_xy(metMastLat[i], metMastLon[i])
-                    self.metMastX[i] = self.metMastX[i] - self.xref
-                    self.metMastY[i] = self.metMastY[i] - self.yref
-                # print(self.metMastX,self.metMastY)
-            try:
-                metMastRadius = self.yamlFile["metMastRadius"]
-            except:
-                metMastRadius = []
-                metMastRadius.append(500.0)
-                for i in range(1, len(metMastRegions)):
-                    metMastRadius.append(500.0)
-            try:
-                metMastRefinementLevel = self.yamlFile["metMastRefinementLevel"]
-            except:
-                metMastRefinementLevel = []
-                metMastRefinementLevel.append(3)
-                for i in range(1, len(metMastRegions)):
-                    metMastRefinementLevel.append(3)
-            try:
-                metMastHeight = self.yamlFile["metMastHeight"]
-            except:
-                metMastHeight = 200
             for i in range(0, len(metMastRegions)):
                 error = 10000
                 for j in range(0, len(self.terrainX1)):
-                    residual = np.sqrt(
-                        (self.terrainX1[j] - self.metMastX[i]) ** 2 + (self.terrainX2[j] - self.metMastY[i]) ** 2
-                    )
+                    residual = np.sqrt((self.terrainX1[j] - metMastX[i]) ** 2 + (self.terrainX2[j] - metMastY[i]) ** 2)
                     if residual < error:
                         error = residual
                         zterrainmin = self.terrainX3[j]
@@ -1909,14 +1926,14 @@ class amrBackend:
                 taggingstring = "tagging." + metMastRegions[i] + ".metmastobject" + str(i) + ".type"
                 target.write("%-50s = cylinder \n" % (taggingstring))
                 taggingstring = "tagging." + metMastRegions[i] + ".metmastobject" + str(i) + ".start"
-                target.write("%-50s = %g %g %g\n" % (taggingstring, self.metMastX[i], self.metMastY[i], zterrainmin))
+                target.write("%-50s = %g %g %g\n" % (taggingstring, metMastX[i], metMastY[i], zterrainmin))
                 taggingstring = "tagging." + metMastRegions[i] + ".metmastobject" + str(i) + ".end"
                 target.write(
                     "%-50s = %g %g %g\n"
                     % (
                         taggingstring,
-                        self.metMastX[i],
-                        self.metMastY[i],
+                        metMastX[i],
+                        metMastY[i],
                         zterrainmin + metMastHeight[i] + 100,
                     )
                 )
@@ -1930,10 +1947,10 @@ class amrBackend:
                 target.write("%-50s = terrain_blank\n" % (taggingstring))
                 taggingstring = "tagging." + metMastRegions[i] + "terrain" + ".grad_error"
                 target.write("%-50s = 0.1 0.1 0.1 0.1 0.1 0.1\n" % (taggingstring))
-                xmin = self.metMastX[i] - metMastRadius[i]
-                xmax = self.metMastX[i] + metMastRadius[i]
-                ymin = self.metMastY[i] - metMastRadius[i]
-                ymax = self.metMastY[i] + metMastRadius[i]
+                xmin = metMastX[i] - metMastRadius[i]
+                xmax = metMastX[i] + metMastRadius[i]
+                ymin = metMastY[i] - metMastRadius[i]
+                ymax = metMastY[i] + metMastRadius[i]
                 taggingstring = "tagging." + metMastRegions[i] + "terrain" + ".box_lo"
                 target.write("%-50s = %g %g %g \n" % (taggingstring, xmin, ymin, zterrainmin - 50))
                 taggingstring = "tagging." + metMastRegions[i] + "terrain" + ".box_hi"
@@ -1967,6 +1984,7 @@ class amrBackend:
         # Write for AEP
         newtarget = Path(self.caseParent, self.caseName, "utm.info").open("w")
         i = 0
+        error = 10000
         for j in range(0, len(self.terrainX1)):
             residual = np.sqrt(
                 (self.terrainX1[j] - self.metMastX[i]) ** 2 + (self.terrainX2[j] - self.metMastY[i]) ** 2
@@ -1995,13 +2013,18 @@ class amrBackend:
 
     def writeAccelerationMaps(self, target):
         try:
+            terrainSamplingTimeInterval = int(self.yamlFile["terrainSamplingTimeInterval"])
+        except:
+            terrainSamplingTimeInterval = 100
+        try:
             writeTerrainSampling = self.yamlFile["writeTerrainSampling"]
         except:
             writeTerrainSampling = True
+
         if writeTerrainSampling:
             # Write a different sampling file for each level since native processing is messy
             try:
-                offsets = self.yamlFile["verticalLevels"]
+                offsets = self.yamlFile["verticalLevels"].copy()
             except:
                 offsets = [10, 50, 100, 150, 200, 250]
             target.write("# postprocessing\n")
@@ -2019,13 +2042,26 @@ class amrBackend:
 
         metMastRegions = []
         try:
+            metMastLineSamplingTimeInterval = int(self.yamlFile["metMastLineSamplingTimeInterval"])
+        except:
+            metMastLineSamplingTimeInterval = 60
+        try:
+            metMastLineSamplingNumPoints = int(self.yamlFile["metMastLineSamplingNumPoints"])
+        except:
+            metMastLineSamplingNumPoints = 50
+        try:
+            metMastLineSamplingHeight = float(self.yamlFile["metMastLineSamplingHeight"])
+        except:
+            metMastLineSamplingHeight = 50.0
+
+        try:
             metMastLineSampling = self.yamlFile["metMastLineSampling"]
         except:
             metMastLineSampling = False
         else:
             if metMastLineSampling:
                 try:
-                    metMastRegions = self.yamlFile["metMastNames"]
+                    metMastRegions = self.yamlFile["metMastNames"].copy()
                 except:
                     pass
                 else:
@@ -2036,7 +2072,9 @@ class amrBackend:
             for levels in offsets:
                 target.write("%-50s = velocity temperature tke \n" % ("terrain" + str(levels) + ".fields"))
                 target.write('%-50s = "native"\n' % ("terrain" + str(levels) + ".output_format"))
-                target.write("%-50s = 100\n" % ("terrain" + str(levels) + ".output_frequency"))
+                target.write(
+                    "%-50s = %g \n" % ("terrain" + str(levels) + ".output_frequency", terrainSamplingTimeInterval)
+                )
                 target.write("%-50s = %s \n" % ("terrain" + str(levels) + ".labels", "terrain" + str(levels)))
                 samplingentity = "terrain" + str(levels) + ".terrain" + str(levels) + ".type"
                 target.write("%-50s = ProbeSampler\n" % (samplingentity))
@@ -2065,14 +2103,16 @@ class amrBackend:
                     target.write("%-50s = %g \n" % (samplingentity, levels))
         if metMastLineSampling and len(metMastRegions) > 0:
             for i in range(0, len(metMastRegions)):
-                target.write("%-50s = velocity temperature tke\n" % (str(metMastRegions[i]) + ".fields"))
+                target.write("%-50s = velocity temperature tke \n" % (str(metMastRegions[i]) + ".fields"))
                 target.write('%-50s = "native"\n' % (str(metMastRegions[i]) + ".output_format"))
-                target.write("%-50s = 60\n" % (str(metMastRegions[i]) + ".output_frequency"))
+                target.write(
+                    "%-50s = %g \n" % (str(metMastRegions[i]) + ".output_frequency", metMastLineSamplingTimeInterval)
+                )
                 target.write("%-50s = %s \n" % (str(metMastRegions[i]) + ".labels", str(metMastRegions[i])))
                 samplingentity = str(metMastRegions[i]) + "." + str(metMastRegions[i]) + ".type"
                 target.write("%-50s = LineSampler\n" % (samplingentity))
                 samplingentity = str(metMastRegions[i]) + "." + str(metMastRegions[i]) + ".num_points"
-                target.write("%-50s = 50\n" % (samplingentity))
+                target.write("%-50s = %g \n" % (samplingentity, metMastLineSamplingNumPoints))
                 samplingentity = str(metMastRegions[i]) + "." + str(metMastRegions[i]) + ".start"
                 zstart = 0
                 # Find z from terrain
@@ -2087,7 +2127,10 @@ class amrBackend:
                 zstart = zstart - 20
                 target.write("%-50s = %g %g %g\n" % (samplingentity, self.metMastX[i], self.metMastY[i], zstart))
                 samplingentity = str(metMastRegions[i]) + "." + str(metMastRegions[i]) + ".end"
-                target.write("%-50s = %g %g %g\n" % (samplingentity, self.metMastX[i], self.metMastY[i], zstart + 200))
+                target.write(
+                    "%-50s = %g %g %g\n"
+                    % (samplingentity, self.metMastX[i], self.metMastY[i], zstart + metMastLineSamplingHeight)
+                )
 
     def closeAMRFiles(self):
         try:
@@ -2172,8 +2215,8 @@ class amrBackend:
         x2 = yterrain.flatten(order="F")
         x3 = zterrain.flatten(order="F")
         target = Path(self.caseParent, self.caseName, folder, "terrain.csv").open("w")
-        metMastLat = self.yamlFile["metMastLat"]
-        metMastLon = self.yamlFile["metMastLon"]
+        metMastLat = self.yamlFile["metMastLat"].copy()
+        metMastLon = self.yamlFile["metMastLon"].copy()
         target.write("%d \n" % (len(x1) + len(metMastLat)))
         for i in range(0, len(metMastLat)):
             tempx, tempy = self.srtm.to_xy(metMastLat[i], metMastLon[i])
